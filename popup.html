@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Session Cleaner</title>
+    <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <img src="48icon.png" alt="Session Cleaner Logo" class="logo">
+            <h1>Session Cleaner</h1>
+        </header>
+        
+        <div class="options">
+            <div class="option">
+                <input type="checkbox" id="cookies" checked>
+                <label for="cookies">Cookies</label>
+            </div>
+            <div class="option">
+                <input type="checkbox" id="localStorage" checked>
+                <label for="localStorage">Local Storage</label>
+            </div>
+            <div class="option">
+                <input type="checkbox" id="sessionStorage" checked>
+                <label for="sessionStorage">Session Storage</label>
+            </div>
+            <div class="option">
+                <input type="checkbox" id="indexedDB" checked>
+                <label for="indexedDB">IndexedDB</label>
+            </div>
+        </div>
+        
+        <button id="cleanBtn" class="clean-btn">Clean Now</button>
+        
+        <div id="status" class="status hidden">
+            <div class="loader"></div>
+            <span id="statusText">Cleaning...</span>
+        </div>
+        
+        <div id="summary" class="summary hidden">
+            <h3>Cleaning Complete!</h3>
+            <ul id="summaryList"></ul>
+        </div>
+    </div>
+    <script src="popup.js"></script>
+</body>
+</html> 
