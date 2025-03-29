@@ -1,10 +1,20 @@
-## Cache Cleaner Installed
+<p align="center">
+  <a href="https://study-timer.com/welcome/">https://study-timer.com/welcome/</a>
+</p>
 
-#Click the puzzle piece (1) in the top right of your browser. 
-#Then, click the little pin (2) next to the extension:
+<p align="center">Study Timer Installed</p>
 
-![Иконка пазла (1)](image1.png)
+<ol>
+  <li>Нажмите на иконку пазла (1) в правом верхнем углу браузера.</li>
+  <li>Затем нажмите на маленький значок закрепления (2) рядом с расширением.</li>
+</ol>
 
-#Open the extension (3) on any page to start using Cache Cleaner:
+<p align="center">
+  <img src="image1.png" alt="Иконка пазла (1)">
+</p>
 
-![Расширение Study Timer (3)](image2.png)
+<p align="center">Откройте расширение (3) на любой странице, чтобы начать использовать Study Timer:</p>
+
+<p align="center">
+  <img src="image2.png" alt="Расширение Study Timer (3)">
+</p>
