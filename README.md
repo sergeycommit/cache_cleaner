@@ -1,9 +1,9 @@
-<p align="center">Cache Cleaner Installed</p>
+<p align="center"style="font-size: 24px;"><b>Cache Cleaner Installed</b></p>
 
-<ol>
-  <li>Click the puzzle piece (1) in the top right of your browser.</li>
-  <li>Then, click the little pin (2) next to the extension:</li>
-</ol>
+
+<p align="center">Click the puzzle piece (1) in the top right of your browser. Then, click 
+the little pin (2) next to the extension:</p>
+
 
 <p align="center">
   <img src="image1.png" alt="Иконка пазла (1)">
