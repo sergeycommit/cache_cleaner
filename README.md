@@ -9,7 +9,7 @@
   <img src="wp1.png" alt="Screen(1)(2)">
 </p>
 
-<p align="center" style="font-size: 18px; margin-bottom: 20px;">
+<p align="center" style="font-size: 18px; margin-bottom: 30px;">
   Open the extension (3) on any page to start using Cache Cleaner:
 </p>
 
