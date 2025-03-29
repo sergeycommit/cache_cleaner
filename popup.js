@@ -1,181 +1,397 @@
-document.addEventListener("DOMContentLoaded", () => {
-  const cleanBtn = document.getElementById("cleanBtn");
-  const status = document.getElementById("status");
-  const statusText = document.getElementById("statusText");
-  const summary = document.getElementById("summary");
-  const summaryList = document.getElementById("summaryList");
+document.addEventListener('DOMContentLoaded', function() {
+    // Theme toggle functionality
+    const themeToggle = document.getElementById('themeToggle');
+    const prefersDarkScheme = window.matchMedia('(prefers-color-scheme: dark)');
 
-  // Get checkboxes
-  const cookiesCheckbox = document.getElementById("cookies");
-  const localStorageCheckbox = document.getElementById("localStorage");
-  const sessionStorageCheckbox = document.getElementById("sessionStorage");
-  const indexedDBCheckbox = document.getElementById("indexedDB");
+    // Check if user has saved theme preference
+    const savedTheme = localStorage.getItem('theme');
 
-  // Load saved preferences
-  chrome.storage.local.get(["cleanPreferences"], (result) => {
-    if (result.cleanPreferences) {
-      cookiesCheckbox.checked = result.cleanPreferences.cookies;
-      localStorageCheckbox.checked = result.cleanPreferences.localStorage;
-      sessionStorageCheckbox.checked = result.cleanPreferences.sessionStorage;
-      indexedDBCheckbox.checked = result.cleanPreferences.indexedDB;
+    if (savedTheme === 'dark' || (!savedTheme && prefersDarkScheme.matches)) {
+        document.body.classList.add('dark-mode');
+        themeToggle.innerHTML = '<i class="fas fa-sun"></i>';
     }
-  });
 
-  cleanBtn.addEventListener("click", () => {
-    // Show loading state
-    cleanBtn.disabled = true;
-    status.classList.remove("hidden");
-    summary.classList.add("hidden");
+    themeToggle.addEventListener('click', function() {
+        document.body.classList.toggle('dark-mode');
 
-    // Save preferences
-    const preferences = {
-      cookies: cookiesCheckbox.checked,
-      localStorage: localStorageCheckbox.checked,
-      sessionStorage: sessionStorageCheckbox.checked,
-      indexedDB: indexedDBCheckbox.checked,
-    };
+        if (document.body.classList.contains('dark-mode')) {
+            localStorage.setItem('theme', 'dark');
+            themeToggle.innerHTML = '<i class="fas fa-sun"></i>';
+        } else {
+            localStorage.setItem('theme', 'light');
+            themeToggle.innerHTML = '<i class="fas fa-moon"></i>';
+        }
+    });
 
-    chrome.storage.local.set({ cleanPreferences: preferences });
+    // Clean button click handler
+    const cleanBtn = document.getElementById('cleanBtn');
+    const statusElement = document.getElementById('status');
+    const statusTextElement = document.getElementById('statusText');
+    const summaryElement = document.getElementById('summary');
+    const summaryListElement = document.getElementById('summaryList');
 
-    // Get active tab
-    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-      const tab = tabs[0];
-      const url = new URL(tab.url);
+    // Get all cleaning option checkboxes
+    const cookies = document.getElementById('cookies');
+    const localStorageCheckbox = document.getElementById('localStorage');
+    const sessionStorageCheckbox = document.getElementById('sessionStorage');
+    const indexedDB = document.getElementById('indexedDB');
+    const clearHistory = document.getElementById('clearHistory');
 
-      const cleanupResults = {
-        cookies: 0,
-        localStorage: 0,
-        sessionStorage: 0,
-        indexedDB: 0,
-      };
+    // Fix for toggle switches - add click event listeners to all toggle switches
+    document.querySelectorAll('.toggle-switch').forEach(toggle => {
+        toggle.addEventListener('click', function(e) {
+            // Only handle clicks on the slider or container, not the label or checkbox itself
+            if (!e.target.matches('input[type="checkbox"]')) {
+                const checkbox = this.querySelector('input[type="checkbox"]');
+                checkbox.checked = !checkbox.checked;
 
-      // Process each cleanup operation
-      const cleanupPromises = [];
+                // Trigger the change event manually
+                const changeEvent = new Event('change', { bubbles: true });
+                checkbox.dispatchEvent(changeEvent);
+            }
+        });
+    });
 
-      // Clean cookies
-      if (preferences.cookies) {
-        const domain = getDomainAndTLD(tab.url);
-        cleanupPromises.push(
-          new Promise((resolve) => {
-            chrome.cookies.getAll({ domain: domain }, (cookies) => {
-              cleanupResults.cookies = cookies.length;
-              for (let cookie of cookies) {
-                const cookieUrl = `http${cookie.secure ? "s" : ""}://${
-                  cookie.domain
-                }${cookie.path}`;
-                chrome.cookies.remove({ url: cookieUrl, name: cookie.name });
-              }
-              resolve();
-            });
-          })
-        );
-      }
+    // Save user preferences
+    function savePreferences() {
+        chrome.storage.local.set({
+            preferences: {
+                cookies: cookies.checked,
+                localStorage: localStorageCheckbox.checked,
+                sessionStorage: sessionStorageCheckbox.checked,
+                indexedDB: indexedDB.checked,
+                clearHistory: clearHistory.checked
+            }
+        });
+    }
 
-      // Clean storages
-      if (
-        preferences.localStorage ||
-        preferences.sessionStorage ||
-        preferences.indexedDB
-      ) {
-        cleanupPromises.push(
-          new Promise((resolve) => {
-            chrome.scripting.executeScript(
-              {
-                target: { tabId: tab.id },
-                function: clearStorages,
-                args: [preferences],
-              },
-              (results) => {
-                if (results && results[0]) {
-                  const result = results[0].result;
-                  cleanupResults.localStorage = result.localStorage;
-                  cleanupResults.sessionStorage = result.sessionStorage;
-                  cleanupResults.indexedDB = result.indexedDB;
+    // Load user preferences
+    function loadPreferences() {
+        chrome.storage.local.get('preferences', function(data) {
+            if (data.preferences) {
+                cookies.checked = data.preferences.cookies;
+                localStorageCheckbox.checked = data.preferences.localStorage;
+                sessionStorageCheckbox.checked = data.preferences.sessionStorage;
+                indexedDB.checked = data.preferences.indexedDB;
+                clearHistory.checked = data.preferences.clearHistory;
+            }
+        });
+    }
+
+    // Save preferences when any option is changed
+    cookies.addEventListener('change', savePreferences);
+    localStorageCheckbox.addEventListener('change', savePreferences);
+    sessionStorageCheckbox.addEventListener('change', savePreferences);
+    indexedDB.addEventListener('change', savePreferences);
+    clearHistory.addEventListener('change', savePreferences);
+
+    // Load saved preferences when popup opens
+    loadPreferences();
+
+    // Clean button click handler
+    cleanBtn.addEventListener('click', function() {
+        // Show status and hide summary
+        statusElement.classList.remove('hidden');
+        summaryElement.classList.add('hidden');
+
+        // Disable clean button during cleaning
+        cleanBtn.disabled = true;
+        cleanBtn.innerHTML = '<div class="loader"></div><span>Cleaning...</span>';
+
+        // Keep track of completed operations
+        const results = {
+            cookies: false,
+            localStorage: false,
+            sessionStorage: false,
+            indexedDB: false,
+            history: false
+        };
+
+        // Keep track of what was actually cleaned
+        const cleaned = [];
+
+        // Get the active tab
+        chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
+            const activeTab = tabs[0];
+            let completedOperations = 0;
+            const totalOperations = calculateTotalOperations();
+
+            // Update status to show progress
+            function updateStatus() {
+                completedOperations++;
+                statusTextElement.textContent = `Cleaning... (${completedOperations}/${totalOperations})`;
+
+                // If all operations are complete, show summary
+                if (completedOperations === totalOperations) {
+                    setTimeout(showSummary, 500);
                 }
-                resolve();
-              }
-            );
-          })
-        );
-      }
+            }
 
-      // When all cleanup is done
-      Promise.all(cleanupPromises).then(() => {
-        // Update status
-        statusText.textContent = "Completed!";
+            // Calculate total number of operations to perform
+            function calculateTotalOperations() {
+                let count = 0;
+                if (cookies.checked) count++;
+                if (localStorageCheckbox.checked) count++;
+                if (sessionStorageCheckbox.checked) count++;
+                if (indexedDB.checked) count++;
+                if (clearHistory.checked) count++;
+                return count;
+            }
 
-        // Show summary
-        summaryList.innerHTML = "";
-        if (preferences.cookies) {
-          summaryList.innerHTML += `<li>${cleanupResults.cookies} cookies removed</li>`;
-        }
-        if (preferences.localStorage) {
-          summaryList.innerHTML += `<li>Local storage cleared (${cleanupResults.localStorage} items)</li>`;
-        }
-        if (preferences.sessionStorage) {
-          summaryList.innerHTML += `<li>Session storage cleared (${cleanupResults.sessionStorage} items)</li>`;
-        }
-        if (preferences.indexedDB) {
-          summaryList.innerHTML += `<li>${cleanupResults.indexedDB} IndexedDB databases removed</li>`;
-        }
+            // Show summary of cleaning
+            function showSummary() {
+                // Reset clean button
+                cleanBtn.disabled = false;
+                cleanBtn.innerHTML = '<i class="fas fa-broom"></i><span>Clean Now</span>';
 
-        summary.classList.remove("hidden");
+                // Hide status
+                statusElement.classList.add('hidden');
 
-        // Enable the button after a short delay
-        setTimeout(() => {
-          cleanBtn.disabled = false;
-          status.classList.add("hidden");
-        }, 1000);
+                // Generate summary list
+                summaryListElement.innerHTML = '';
+                cleaned.forEach(item => {
+                    const li = document.createElement('li');
+                    li.textContent = item;
+                    summaryListElement.appendChild(li);
+                });
 
-        // Show the badge on the extension icon
-        chrome.action.setBadgeText({ text: "Done", tabId: tab.id });
-        setTimeout(() => {
-          chrome.action.setBadgeText({ text: "", tabId: tab.id });
-        }, 2000);
-      });
+                // Show summary
+                summaryElement.classList.remove('hidden');
+
+                // Create a notification only if the API is available
+                if (chrome.notifications) {
+                    chrome.notifications.create({
+                        type: 'basic',
+                        iconUrl: 'icon.png',
+                        title: 'Cache Cleaner',
+                        message: 'Cleaning complete!',
+                        priority: 2
+                    });
+                }
+            }
+
+            // Clean cookies
+            if (cookies.checked) {
+                // Get the domain of the active tab
+                const url = new URL(activeTab.url);
+                const domain = url.hostname;
+
+                // Use the cookies API to get and remove cookies
+                chrome.cookies.getAll({domain: domain}, function(cookieList) {
+                    const cookieCount = cookieList.length;
+
+                    if (cookieCount > 0) {
+                        let removedCount = 0;
+
+                        cookieList.forEach(cookie => {
+                            const protocol = url.protocol.includes('https') ? 'https://' : 'http://';
+                            const cookieUrl = protocol + cookie.domain + cookie.path;
+
+                            chrome.cookies.remove({
+                                url: cookieUrl,
+                                name: cookie.name
+                            }, function() {
+                                removedCount++;
+                                if (removedCount === cookieCount) {
+                                    cleaned.push(`Cleared ${cookieCount} cookies`);
+                                    results.cookies = true;
+                                    updateStatus();
+                                }
+                            });
+                        });
+                    } else {
+                        cleaned.push('No cookies to clear');
+                        results.cookies = true;
+                        updateStatus();
+                    }
+                });
+            }
+
+            // Clean localStorage
+            if (localStorageCheckbox.checked) {
+                chrome.scripting.executeScript({
+                    target: {tabId: activeTab.id},
+                    func: () => {
+                        const count = window.localStorage.length;
+                        window.localStorage.clear();
+                        return count;
+                    }
+                }).then(result => {
+                    if (result && result[0] && result[0].result > 0) {
+                        cleaned.push(`Cleared local storage (${result[0].result} items)`);
+                    } else {
+                        cleaned.push('No local storage to clear');
+                    }
+                    results.localStorage = true;
+                    updateStatus();
+                }).catch(error => {
+                    console.error("Error clearing localStorage:", error);
+                    cleaned.push('Failed to clear local storage');
+                    results.localStorage = true;
+                    updateStatus();
+                });
+            }
+
+            // Clean sessionStorage
+            if (sessionStorageCheckbox.checked) {
+                chrome.scripting.executeScript({
+                    target: {tabId: activeTab.id},
+                    func: () => {
+                        const count = window.sessionStorage.length;
+                        window.sessionStorage.clear();
+                        return count;
+                    }
+                }).then(result => {
+                    if (result && result[0] && result[0].result > 0) {
+                        cleaned.push(`Cleared session storage (${result[0].result} items)`);
+                    } else {
+                        cleaned.push('No session storage to clear');
+                    }
+                    results.sessionStorage = true;
+                    updateStatus();
+                }).catch(error => {
+                    console.error("Error clearing sessionStorage:", error);
+                    cleaned.push('Failed to clear session storage');
+                    results.sessionStorage = true;
+                    updateStatus();
+                });
+            }
+
+            // Clean indexedDB
+            if (indexedDB.checked) {
+                chrome.scripting.executeScript({
+                    target: {tabId: activeTab.id},
+                    func: () => {
+                        return new Promise((resolve) => {
+                            if (!window.indexedDB) {
+                                resolve(0);
+                                return;
+                            }
+
+                            // For Manifest V3, we need to use a different approach
+                            if (indexedDB.databases) {
+                                indexedDB.databases().then(dbs => {
+                                    if (!dbs || dbs.length === 0) {
+                                        resolve(0);
+                                        return;
+                                    }
+
+                                    let completed = 0;
+                                    dbs.forEach(db => {
+                                        const request = indexedDB.deleteDatabase(db.name);
+                                        request.onsuccess = () => {
+                                            completed++;
+                                            if (completed === dbs.length) {
+                                                resolve(dbs.length);
+                                            }
+                                        };
+                                        request.onerror = () => {
+                                            completed++;
+                                            if (completed === dbs.length) {
+                                                resolve(dbs.length);
+                                            }
+                                        };
+                                    });
+                                }).catch(() => resolve(0));
+                            } else {
+                                // Fallback for browsers that don't support indexedDB.databases()
+                                resolve(0);
+                            }
+                        });
+                    }
+                }).then(result => {
+                    if (result && result[0] && result[0].result > 0) {
+                        cleaned.push(`Cleared IndexedDB (${result[0].result} databases)`);
+                    } else {
+                        cleaned.push('No IndexedDB to clear');
+                    }
+                    results.indexedDB = true;
+                    updateStatus();
+                }).catch(error => {
+                    console.error("Error clearing indexedDB:", error);
+                    cleaned.push('Failed to clear IndexedDB');
+                    results.indexedDB = true;
+                    updateStatus();
+                });
+            }
+
+            // Clear browsing history for the last hour
+            if (clearHistory.checked) {
+                const oneHourAgo = new Date().getTime() - (60 * 60 * 1000);
+                chrome.history.deleteRange(
+                    {
+                        startTime: oneHourAgo,
+                        endTime: new Date().getTime()
+                    },
+                    () => {
+                        if (chrome.runtime.lastError) {
+                            cleaned.push('Failed to clear browsing history');
+                        } else {
+                            cleaned.push('Cleared browsing history (last hour)');
+                        }
+                        results.history = true;
+                        updateStatus();
+                    }
+                );
+            }
+
+            // If no operations are selected, show a message
+            if (totalOperations === 0) {
+                statusTextElement.textContent = 'No cleaning options selected';
+                setTimeout(() => {
+                    statusElement.classList.add('hidden');
+                    cleanBtn.disabled = false;
+                    cleanBtn.innerHTML = '<i class="fas fa-broom"></i><span>Clean Now</span>';
+                }, 1500);
+            }
+        });
     });
-  });
+
+    // Add button hover effect with sound - safely handle sound files that might not exist
+    cleanBtn.addEventListener('mouseenter', function() {
+        try {
+            const hoverSound = new Audio('hover.mp3');
+            hoverSound.volume = 0.2;
+            hoverSound.play().catch(() => {});  // Catch and ignore errors if sound can't play
+        } catch (e) {
+            // Ignore errors if the audio file doesn't exist
+        }
+    });
+
+    // Add button click sound - safely handle sound files that might not exist
+    cleanBtn.addEventListener('mousedown', function() {
+        try {
+            const clickSound = new Audio('click.mp3');
+            clickSound.volume = 0.3;
+            clickSound.play().catch(() => {});  // Catch and ignore errors if sound can't play
+        } catch (e) {
+            // Ignore errors if the audio file doesn't exist
+        }
+    });
+
+    // Show "Ready to clean" tooltip on first load
+    setTimeout(() => {
+        const tooltip = document.createElement('div');
+        tooltip.className = 'tooltip';
+        tooltip.textContent = 'Ready to clean!';
+        document.body.appendChild(tooltip);
+
+        // Position tooltip near clean button
+        const cleanBtnRect = cleanBtn.getBoundingClientRect();
+        tooltip.style.top = (cleanBtnRect.top - 40) + 'px';
+        tooltip.style.left = (cleanBtnRect.left + cleanBtnRect.width / 2 - 50) + 'px';
+
+        // Add animation class
+        setTimeout(() => {
+            tooltip.classList.add('show');
+
+            // Remove tooltip after a few seconds
+            setTimeout(() => {
+                tooltip.classList.remove('show');
+                setTimeout(() => {
+                    tooltip.remove();
+                }, 500);
+            }, 3000);
+        }, 100);
+    }, 800);
 });
-
-// Helper function to get domain and TLD
-function getDomainAndTLD(url) {
-  const urlObj = new URL(url);
-  const parts = urlObj.hostname.split(".");
-  if (parts.length > 2) {
-    return parts.slice(-2).join(".");
-  }
-  return urlObj.hostname;
-}
-
-// Function to be injected into the page to clear storages
-function clearStorages(preferences) {
-  const result = {
-    localStorage: 0,
-    sessionStorage: 0,
-    indexedDB: 0,
-  };
-
-  // Clear localStorage
-  if (preferences.localStorage) {
-    result.localStorage = localStorage.length;
-    localStorage.clear();
-  }
-
-  // Clear sessionStorage
-  if (preferences.sessionStorage) {
-    result.sessionStorage = sessionStorage.length;
-    sessionStorage.clear();
-  }
-
-  // Clear IndexedDB
-  if (preferences.indexedDB && window.indexedDB) {
-    window.indexedDB.databases().then((dbs) => {
-      result.indexedDB = dbs.length;
-      dbs.forEach((db) => {
-        window.indexedDB.deleteDatabase(db.name);
-      });
-    });
-  }
-
-  return result;
-}

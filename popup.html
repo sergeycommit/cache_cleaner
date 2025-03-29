@@ -3,47 +3,93 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Session Cleaner</title>
+    <title>Cache Cleaner</title>
     <link rel="stylesheet" href="popup.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
 </head>
 <body>
-    <div class="container">
-        <header>
-            <img src="48icon.png" alt="Session Cleaner Logo" class="logo">
-            <h1>Session Cleaner</h1>
-        </header>
-        
+<div class="container">
+    <header>
+        <div class="app-info">
+            <img src="icon.png" alt="Cache Cleaner Logo" class="logo">
+            <h1>Cache Cleaner</h1>
+        </div>
+        <button id="themeToggle" class="theme-toggle">
+            <i class="fas fa-moon"></i>
+        </button>
+    </header>
+
+    <div class="card">
+        <div class="card-header">
+            <i class="fas fa-window-restore"></i>
+            <h2>Current Tab Data</h2>
+        </div>
         <div class="options">
-            <div class="option">
-                <input type="checkbox" id="cookies" checked>
+            <div class="option-row">
                 <label for="cookies">Cookies</label>
+                <div class="toggle-switch">
+                    <input type="checkbox" id="cookies" checked>
+                    <span class="slider"></span>
+                </div>
             </div>
-            <div class="option">
-                <input type="checkbox" id="localStorage" checked>
+            <div class="option-row">
                 <label for="localStorage">Local Storage</label>
+                <div class="toggle-switch">
+                    <input type="checkbox" id="localStorage" checked>
+                    <span class="slider"></span>
+                </div>
             </div>
-            <div class="option">
-                <input type="checkbox" id="sessionStorage" checked>
+            <div class="option-row">
                 <label for="sessionStorage">Session Storage</label>
+                <div class="toggle-switch">
+                    <input type="checkbox" id="sessionStorage" checked>
+                    <span class="slider"></span>
+                </div>
             </div>
-            <div class="option">
-                <input type="checkbox" id="indexedDB" checked>
+            <div class="option-row">
                 <label for="indexedDB">IndexedDB</label>
+                <div class="toggle-switch">
+                    <input type="checkbox" id="indexedDB" checked>
+                    <span class="slider"></span>
+                </div>
             </div>
-        </div>
-        
-        <button id="cleanBtn" class="clean-btn">Clean Now</button>
-        
-        <div id="status" class="status hidden">
-            <div class="loader"></div>
-            <span id="statusText">Cleaning...</span>
-        </div>
-        
-        <div id="summary" class="summary hidden">
-            <h3>Cleaning Complete!</h3>
-            <ul id="summaryList"></ul>
         </div>
     </div>
-    <script src="popup.js"></script>
+
+    <div class="card">
+        <div class="card-header">
+            <i class="fas fa-history"></i>
+            <h2>Browsing History</h2>
+        </div>
+        <div class="options">
+            <div class="option-row">
+                <label for="clearHistory">Clear Last Hour</label>
+                <div class="toggle-switch">
+                    <input type="checkbox" id="clearHistory">
+                    <span class="slider"></span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <button id="cleanBtn" class="clean-btn">
+        <i class="fas fa-broom"></i>
+        <span>Clean Now</span>
+    </button>
+
+    <div id="status" class="status-card hidden">
+        <div class="loader"></div>
+        <span id="statusText">Cleaning in progress...</span>
+    </div>
+
+    <div id="summary" class="summary-card hidden">
+        <div class="summary-header">
+            <i class="fas fa-check-circle"></i>
+            <h3>Cleaning Complete!</h3>
+        </div>
+        <ul id="summaryList"></ul>
+    </div>
+</div>
+<script src="popup.js"></script>
 </body>
-</html> 
+</html>
