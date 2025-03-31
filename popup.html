@@ -3,92 +3,156 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cache Cleaner</title>
+    <title>Cache Cleaner Advanced</title>
     <link rel="stylesheet" href="popup.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.2.0/css/all.min.css">
 </head>
 <body>
 <div class="container">
     <header>
         <div class="app-info">
-            <img src="icon.png" alt="Cache Cleaner Logo" class="logo">
+            <img src="images/icon.png" alt="Cache Cleaner Logo" class="logo">
             <h1>Cache Cleaner</h1>
         </div>
-        <button id="themeToggle" class="theme-toggle">
+        <!-- Кнопка "Поделиться" удалена -->
+        <button id="themeToggle" class="theme-toggle" title="Toggle Theme" aria-label="Toggle Theme">
             <i class="fas fa-moon"></i>
         </button>
     </header>
 
-    <div class="card">
+    <!-- Сообщения -->
+    <div id="tabStatusMessage" class="status-message warning hidden" role="status">
+        <i class="fas fa-info-circle"></i> <span id="tabStatusText"></span>
+    </div>
+    <div id="rateRequest" class="status-message info hidden" role="dialog" aria-labelledby="rateRequestText">
+        <i class="fas fa-star"></i>
+        <span id="rateRequestText">Enjoying Cache Cleaner? A review helps others discover it!</span>
+        <div class="rate-actions">
+            <a href="YOUR_CHROME_STORE_URL_HERE" target="_blank" id="rateNowBtn" class="rate-btn rate-now">Rate Now</a>
+            <button id="rateLaterBtn" class="rate-btn rate-later">Later</button>
+            <button id="rateNeverBtn" class="rate-btn rate-never">Don't Ask</button>
+        </div>
+    </div>
+    <!-- Сообщение об успешном копировании удалено -->
+    <div id="dataFetchError" class="status-message error hidden" role="status">
+        <i class="fas fa-exclamation-triangle"></i> <span>Could not retrieve data counts for this tab.</span>
+    </div>
+
+    <div id="infoTooltip" class="tooltip" role="tooltip" aria-hidden="true"></div>
+
+    <!-- Данные Текущей Вкладки -->
+    <div class="card" id="currentTabDataCard">
         <div class="card-header">
-            <i class="fas fa-window-restore"></i>
-            <h2>Current Tab Data</h2>
+            <i class="fas fa-window-restore"></i> <h2>Current Tab Data</h2>
         </div>
         <div class="options">
             <div class="option-row">
-                <label for="cookies">Cookies</label>
-                <div class="toggle-switch">
-                    <input type="checkbox" id="cookies" checked>
-                    <span class="slider"></span>
-                </div>
+                <label for="cookies"> Cookies <span class="data-count" id="cookiesCount"></span>
+                    <i class="fas fa-info-circle info-icon" data-tooltip="Site data for logins, preferences, etc. Cleared only for the current site's domain." aria-label="Info about Cookies"></i>
+                </label>
+                <div class="toggle-switch"><input type="checkbox" id="cookies"><span class="slider"></span></div>
             </div>
             <div class="option-row">
-                <label for="localStorage">Local Storage</label>
-                <div class="toggle-switch">
-                    <input type="checkbox" id="localStorage" checked>
-                    <span class="slider"></span>
-                </div>
+                <label for="localStorage"> Local Storage <span class="data-count" id="localStorageCount"></span>
+                    <i class="fas fa-info-circle info-icon" data-tooltip="Data stored permanently by the site. Cleared only for the current site." aria-label="Info about Local Storage"></i>
+                </label>
+                <div class="toggle-switch"><input type="checkbox" id="localStorage"><span class="slider"></span></div>
             </div>
             <div class="option-row">
-                <label for="sessionStorage">Session Storage</label>
-                <div class="toggle-switch">
-                    <input type="checkbox" id="sessionStorage" checked>
-                    <span class="slider"></span>
-                </div>
-            </div>
-            <div class="option-row">
-                <label for="indexedDB">IndexedDB</label>
-                <div class="toggle-switch">
-                    <input type="checkbox" id="indexedDB" checked>
-                    <span class="slider"></span>
-                </div>
+                <label for="sessionStorage"> Session Storage <span class="data-count" id="sessionStorageCount"></span>
+                    <i class="fas fa-info-circle info-icon" data-tooltip="Temporary data stored by the site. Cleared only for the current site." aria-label="Info about Session Storage"></i>
+                </label>
+                <div class="toggle-switch"><input type="checkbox" id="sessionStorage"><span class="slider"></span></div>
             </div>
         </div>
     </div>
 
-    <div class="card">
-        <div class="card-header">
-            <i class="fas fa-history"></i>
-            <h2>Browsing History</h2>
+    <!-- Advanced Options (сворачиваемый блок) -->
+    <div class="card collapsible collapsed" id="additionalOptionsCard">
+        <div class="card-header collapsible-header" role="button" tabindex="0" aria-expanded="false" aria-controls="additionalOptionsContent">
+            <i class="fas fa-sliders-h"></i>
+            <h2>Advanced Options</h2>
+            <i class="fas fa-chevron-down collapse-icon"></i>
         </div>
-        <div class="options">
-            <div class="option-row">
-                <label for="clearHistory">Clear Last Hour</label>
-                <div class="toggle-switch">
-                    <input type="checkbox" id="clearHistory">
-                    <span class="slider"></span>
+        <div class="card-content" id="additionalOptionsContent">
+            <div class="options options-padded">
+                <!-- Time Range Setting -->
+                <div class="option-row">
+                    <label for="timeRangeSelect">Time Range:</label>
+                    <select id="timeRangeSelect" class="time-range-select">
+                        <option value="3600000">Last hour</option>
+                        <option value="86400000">Last 24 hours</option>
+                        <option value="604800000">Last 7 days</option>
+                        <option value="2419200000">Last 4 weeks</option>
+                        <option value="0">All time</option>
+                    </select>
                 </div>
-            </div>
-        </div>
-    </div>
+                <!-- Global Cleaning Options -->
+                <div class="option-row">
+                    <label for="cache"> Browser Cache <span class="option-range-indicator"></span>
+                        <i class="fas fa-info-circle info-icon" data-tooltip="Temporary internet files. Cleared for all sites based on selected time range." aria-label="Info about Browser Cache"></i>
+                    </label>
+                    <div class="toggle-switch"><input type="checkbox" id="cache"><span class="slider"></span></div>
+                </div>
+                <div class="option-row">
+                    <label for="indexedDB"> IndexedDB <span class="option-range-indicator"></span>
+                        <i class="fas fa-info-circle info-icon" data-tooltip="Databases used by web apps. Cleared for all sites based on selected time range." aria-label="Info about IndexedDB"></i>
+                    </label>
+                    <div class="toggle-switch"><input type="checkbox" id="indexedDB"><span class="slider"></span></div>
+                </div>
+                <div class="option-row">
+                    <label for="clearHistory"> History <span class="option-range-indicator"></span>
+                        <i class="fas fa-info-circle info-icon" data-tooltip="Your record of visited websites. Cleared based on selected time range." aria-label="Info about Clearing History"></i>
+                    </label>
+                    <div class="toggle-switch"><input type="checkbox" id="clearHistory"><span class="slider"></span></div>
+                </div>
+                <!-- Other Settings -->
+                <div class="option-row setting-separator">
+                    <label for="reloadPage"> Reload Page After Cleaning
+                        <i class="fas fa-info-circle info-icon" data-tooltip="Automatically reload the current page after cleaning is finished successfully." aria-label="Info about Reload Page setting"></i>
+                    </label>
+                    <div class="toggle-switch"><input type="checkbox" id="reloadPage"><span class="slider"></span></div>
+                </div>
+                <div class="option-row">
+                    <label for="confirmBeforeClean"> Confirm Before Cleaning
+                        <i class="fas fa-info-circle info-icon" data-tooltip="Shows an extra confirmation step before clearing the selected data." aria-label="Info about Confirm Before Cleaning setting"></i>
+                    </label>
+                    <div class="toggle-switch"><input type="checkbox" id="confirmBeforeClean"><span class="slider"></span></div>
+                </div>
+            </div> <!-- Конец options-padded -->
+        </div> <!-- Конец card-content -->
+    </div> <!-- Конец collapsible card -->
 
-    <button id="cleanBtn" class="clean-btn">
+
+    <!-- Кнопка Очистки и Индикаторы Настроек -->
+    <button id="cleanBtn" class="clean-btn" aria-live="polite">
+        <!-- Содержимое кнопки управляется JS -->
         <i class="fas fa-broom"></i>
-        <span>Clean Now</span>
+        <span id="cleanBtnText" class="btn-text">Clean Now</span>
+        <div class="clean-btn-indicators">
+            <span id="reloadIndicator" class="setting-indicator hidden" title="Page will reload"><i class="fas fa-sync-alt"></i></span>
+            <span id="confirmIndicator" class="setting-indicator hidden" title="Confirmation needed"><i class="fas fa-check-double"></i></span>
+        </div>
     </button>
 
-    <div id="status" class="status-card hidden">
-        <div class="loader"></div>
-        <span id="statusText">Cleaning in progress...</span>
-    </div>
-
-    <div id="summary" class="summary-card hidden">
+    <!-- Карточки Результатов -->
+    <div id="summary" class="summary-card hidden" aria-live="polite">
         <div class="summary-header">
             <i class="fas fa-check-circle"></i>
-            <h3>Cleaning Complete!</h3>
+            <h3>Cleaning Summary</h3>
+            <button id="closeSummaryBtn" class="close-btn" title="Close Summary" aria-label="Close Summary">×</button>
         </div>
         <ul id="summaryList"></ul>
     </div>
+    <div id="errorCard" class="summary-card error hidden" role="alert" aria-live="assertive">
+        <div class="summary-header error-header">
+            <i class="fas fa-exclamation-triangle"></i>
+            <h3>Cleaning Issues</h3>
+            <button id="closeErrorBtn" class="close-btn" title="Close Errors" aria-label="Close Errors">×</button>
+        </div>
+        <ul id="errorList"></ul>
+    </div>
+
 </div>
 <script src="popup.js"></script>
 </body>

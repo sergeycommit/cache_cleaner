@@ -6,7 +6,7 @@
 </p>
 
 <p align="center" style="margin-bottom: 30px;">
-  <img src="wp1.png" alt="Screen(1)(2)">
+  <img src="images/wp1.png" alt="Screen(1)(2)">
 </p>
 
 <p align="center" style="font-size: 18px; margin-bottom: 30px;">
@@ -14,5 +14,5 @@
 </p>
 
 <p align="center">
-  <img src="wp2.png" alt="Screen(3)">
+  <img src="images/wp2.png" alt="Screen(3)">
 </p>
