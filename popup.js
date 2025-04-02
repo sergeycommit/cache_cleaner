@@ -1,19 +1,14 @@
 /// popup.js - Rewritten (v3)
 
 // --- Constants ---
-const STORAGE_KEYS = { PREFERENCES: 'preferences', USAGE_STATS: 'usageStats', THEME: 'theme', CLEANING_FLAG: 'isCleaning' };
+const STORAGE_KEYS = { PREFERENCES: 'preferences', USAGE_STATS: 'usageStats', THEME: 'theme', CLEANING_FLAG: 'isCleaning', RATING_SHOWN: 'ratingShown', LAST_RATING_PROMPT: 'lastRatingPrompt'};
 const DEFAULT_PREFERENCES = { cookies: true, localStorage: true, sessionStorage: true, cache: false, indexedDB: false, clearHistory: false, reloadPage: true, confirmBeforeClean: false, timeRange: '3600000' };
-const DEFAULT_USAGE_STATS = { cleanCount: 0, reviewRequested: false };
-const REVIEW_REQUEST_THRESHOLD = 5;
+const DEFAULT_USAGE_STATS = { cleanCount: 0 };
 const SELECTORS = {
     themeToggle: '#themeToggle',
     appTitle: 'header h1',
     tabStatusMessage: '#tabStatusMessage',
     tabStatusText: '#tabStatusText',
-    rateRequest: '#rateRequest',
-    rateNowBtn: '#rateNowBtn',
-    rateLaterBtn: '#rateLaterBtn',
-    rateNeverBtn: '#rateNeverBtn',
     dataFetchError: '#dataFetchError',
     infoTooltip: '#infoTooltip',
     currentTabDataCard: '#currentTabDataCard',
@@ -44,7 +39,9 @@ const SELECTORS = {
     errorListElement: '#errorList',
     closeErrorBtn: '#closeErrorBtn',
     infoIcons: '.info-icon',
-    optionRows: '.option-row'
+    optionRows: '.option-row',
+    ratingSection: '#ratingSection',
+    ratingStars: '.rating-group input'
 };
 const $ = {}; // Object to cache DOM elements
 
@@ -85,7 +82,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         addRuntimeMessageListener();
         addStorageListener();
         updateCleanButtonState();
-        checkAndShowRateRequest();
+        setupRatingStars();
     } catch (error) {
         console.error("Popup Initialization Failed:", error);
         displayFatalError(`Initialization failed: ${error.message}`);
@@ -349,9 +346,6 @@ function addEventListeners() {
     $.additionalOptionsHeader?.addEventListener('click', () => setTimeout(repositionTooltip, 350));
     $.cleanBtn?.addEventListener('click', handleCleanButtonClick);
     $.cleanBtn?.addEventListener('mouseout', handleCleanButtonMouseout);
-    $.rateNowBtn?.addEventListener('click', () => handleRateRequestAction('now'));
-    $.rateLaterBtn?.addEventListener('click', () => handleRateRequestAction('later'));
-    $.rateNeverBtn?.addEventListener('click', () => handleRateRequestAction('never'));
     $.closeSummaryBtn?.addEventListener('click', () => $.summaryElement?.classList.add('hidden'));
     $.closeErrorBtn?.addEventListener('click', () => $.errorElement?.classList.add('hidden'));
     document.body.addEventListener('scroll', handleBodyScroll, { capture: true, passive: true });
@@ -410,9 +404,35 @@ function handleBodyClick(e) {
     const toggleTarget = e.target.closest('.toggle-switch');
     const infoIconTarget = e.target.closest('.info-icon');
     const collapsibleHeader = e.target.closest('.collapsible-header');
+    const ratingLabel = e.target.closest('.rating-group label');
+    const ratingInput = e.target.closest('.rating-group input');
 
     if (infoIconTarget || e.target === $.infoTooltip) { e.stopPropagation(); return; }
     if (collapsibleHeader) { toggleCollapsibleSection(collapsibleHeader); return; }
+
+    // Handle rating input clicks
+    if (ratingLabel) {
+        e.preventDefault(); // Prevent default anchor behavior
+        const inputId = ratingLabel.getAttribute('for');
+        if (inputId) {
+            const input = document.getElementById(inputId);
+            if (input) {
+                input.checked = true;
+
+                // Record the rating
+                if (input.value) {
+                    recordRating(parseInt(input.value, 10));
+                }
+
+                // Open the link
+                const anchor = ratingLabel.querySelector('a');
+                if (anchor && anchor.href) {
+                    window.open(anchor.href, '_blank');
+                }
+            }
+        }
+        return;
+    }
 
     if (labelTarget || (toggleTarget && !e.target.matches('input[type="checkbox"]'))) {
         const row = e.target.closest('.option-row');
@@ -551,6 +571,10 @@ function handleCleaningComplete(message) {
             <i class="fas fa-check status-icon"></i>
             <span class="status-text">Success</span>
         `;
+        usageStats.cleanCount++;
+        saveUsageStats();
+        // Проверяем необходимость показа рейтинга
+        checkAndShowRateRequest();
 
         // Set timer to return to normal state
         cleanBtnTimeout = setTimeout(() => {
@@ -658,64 +682,91 @@ async function handleCleanButtonClick() {
     if (!isAnyCleaningOptionSelected() && !isAwaitingConfirmation) return;
 
     try {
+        // Check cleaning flag in storage
         const data = await chrome.storage.local.get(STORAGE_KEYS.CLEANING_FLAG);
         if (data?.[STORAGE_KEYS.CLEANING_FLAG] === true) {
             console.warn("Popup: Cleaning flag is still true. Aborting.");
-            isCleaningInProgress = true; setButtonVisualState('loading', 'Cleaning in progress...'); return;
+            isCleaningInProgress = true;
+            setButtonVisualState('loading', 'Cleaning in progress...');
+            return;
         }
-    } catch (e) { console.error("Popup: Failed to check cleaning flag:", e); setButtonVisualState('error', 'State Check Failed'); resetAfterDelay(2000); return; }
 
-    if (currentPreferences.confirmBeforeClean && !isAwaitingConfirmation) {
-        isAwaitingConfirmation = true;
-        setButtonVisualState('confirm', 'Confirm Clean?');
-        setTimeout(() => { document.addEventListener('click', handleOutsideConfirmClick, { once: true, capture: true }); }, 0);
-        return;
-    }
+        // Handle confirmation state
+        if (currentPreferences.confirmBeforeClean && !isAwaitingConfirmation) {
+            isAwaitingConfirmation = true;
+            setButtonVisualState('confirm', 'Confirm Clean?');
+            setTimeout(() => {
+                document.addEventListener('click', handleOutsideConfirmClick, { once: true, capture: true });
+            }, 0);
+            return;
+        }
 
-    isAwaitingConfirmation = false;
-    if (isAwaitingConfirmation) { // Check if confirmation mode was previously active
-        document.removeEventListener('click', handleOutsideConfirmClick, { capture: true });
-    }
-    isCleaningInProgress = true;
-    setButtonVisualState('loading', 'Cleaning in progress...');
-    hideResultCards();
+        // Remove confirmation state if active
+        if (isAwaitingConfirmation) {
+            document.removeEventListener('click', handleOutsideConfirmClick, { capture: true });
+        }
 
-    const optionsToSend = {
-        cookies: $.cookiesCheck?.checked && !$.cookiesCheck?.disabled,
-        localStorage: $.localStorageCheck?.checked && !$.localStorageCheck?.disabled,
-        sessionStorage: $.sessionStorageCheck?.checked && !$.sessionStorageCheck?.disabled,
-        cache: $.cacheCheck?.checked,
-        indexedDB: $.indexedDBCheck?.checked,
-        clearHistory: $.clearHistoryCheck?.checked,
-        reloadPage: currentPreferences.reloadPage,
-    };
-    const sinceTime = getSinceTime(currentPreferences.timeRange);
+        // Set cleaning states
+        isAwaitingConfirmation = false;
+        isCleaningInProgress = true;
 
-    try {
-        // Set the flag to ignore the next storage change event
+        // Update UI
+        setButtonVisualState('loading', 'Cleaning in progress...');
+        hideResultCards();
+
+        // Prepare cleaning options
+        const optionsToSend = {
+            cookies: $.cookiesCheck?.checked && !$.cookiesCheck?.disabled,
+            localStorage: $.localStorageCheck?.checked && !$.localStorageCheck?.disabled,
+            sessionStorage: $.sessionStorageCheck?.checked && !$.sessionStorageCheck?.disabled,
+            cache: $.cacheCheck?.checked,
+            indexedDB: $.indexedDBCheck?.checked,
+            clearHistory: $.clearHistoryCheck?.checked,
+            reloadPage: currentPreferences.reloadPage,
+        };
+
+        const sinceTime = getSinceTime(currentPreferences.timeRange);
+
+        // Set flag to ignore next storage change
         ignoreNextStorageChange = true;
 
-        chrome.runtime.sendMessage({ action: "cleanData", options: optionsToSend, tabInfo: activeTabInfo, sinceTime: sinceTime })
-            .catch(error => {
-                console.error("Popup: Error *sending* message to SW:", error);
-                isCleaningInProgress = false;
-                setButtonVisualState('error', 'Service Error');
-                const errorMsg = error.message.includes('Could not establish connection') ? "Service Error: Cannot connect. Try reloading extension." : `Service Error: ${error.message}`;
-                displayResults(false, [], [errorMsg]);
-                resetAfterDelay(4000);
-                chrome.storage.local.remove(STORAGE_KEYS.CLEANING_FLAG);
-            });
+        // Send cleaning message to service worker
+        await chrome.runtime.sendMessage({
+            action: "cleanData",
+            options: optionsToSend,
+            tabInfo: activeTabInfo,
+            sinceTime: sinceTime
+        });
 
+        // Update usage stats
         usageStats.cleanCount++;
         saveUsageStats();
         checkAndShowRateRequest();
 
     } catch (error) {
-        console.error("Popup: Unexpected error before sending message:", error);
+        console.error("Popup: Error during cleaning:", error);
+
+        // Reset states
         isCleaningInProgress = false;
+        isAwaitingConfirmation = false;
+
+        // Update UI with error
         setButtonVisualState('error', 'Error');
-        displayResults(false, [], [`An unexpected error occurred: ${error.message}`]);
+
+        // Show appropriate error message
+        let errorMessage = 'An unexpected error occurred.';
+        if (error.message.includes('Could not establish connection')) {
+            errorMessage = 'Service Error: Cannot connect. Try reloading extension.';
+        } else {
+            errorMessage = `Service Error: ${error.message}`;
+        }
+
+        displayResults(false, [], [errorMessage]);
+
+        // Clean up and reset
         resetAfterDelay(3000);
+        chrome.storage.local.remove(STORAGE_KEYS.CLEANING_FLAG)
+            .catch(err => console.error("Failed to remove cleaning flag:", err));
     }
 }
 
@@ -724,14 +775,6 @@ function handleOutsideConfirmClick(event) {
         event.preventDefault(); event.stopPropagation();
         resetConfirmationState();
         updateCleanButtonState();
-    }
-}
-
-function handleRateRequestAction(action) {
-    if (!$.rateRequest) return;
-    $.rateRequest.classList.add('hidden');
-    if (action === 'never' || action === 'now') {
-        usageStats.reviewRequested = true; saveUsageStats();
     }
 }
 
@@ -915,6 +958,51 @@ function resetButtonState() {
     updateCleanButtonState();
 }
 
+// --- Rating Stars Functions ---
+function setupRatingStars() {
+    if (!$.ratingStars) return;
+
+    // Make all ratings interactive
+    const stars = document.querySelectorAll('.rating-group input');
+    stars.forEach(star => {
+        star.addEventListener('change', (e) => {
+            const rating = parseInt(e.target.value, 10);
+            if (!isNaN(rating)) {
+                recordRating(rating);
+
+                // Open appropriate URL
+                if (rating >= 4) {
+                    // Good rating - open Chrome Web Store
+                    window.open('https://chromewebstore.google.com/detail/cache-cleaner/deadjnaenmndpdpakgchpbedlcdmmoai/reviews', '_blank');
+                } else {
+                    // Lower rating - open feedback form
+                    window.open('https://docs.google.com/forms/d/e/1FAIpQLSfMhxA90yHeCzM--GsPpnqlf_d9Rjm8N5jB0c52YyOst9MWdg/viewform?usp=dialog', '_blank');
+                }
+            }
+        });
+    });
+}
+
+function recordRating(rating) {
+    // Save the rating information to storage
+    chrome.storage.local.set({
+        [STORAGE_KEYS.RATING_SHOWN]: true,
+        userRating: rating,
+        ratingTimestamp: Date.now()
+    }, () => {
+        if (chrome.runtime.lastError) {
+            console.error("Error saving rating data:", chrome.runtime.lastError);
+        }
+    });
+
+    // Hide rating section after a small delay
+    setTimeout(() => {
+        if ($.ratingSection) {
+            $.ratingSection.classList.add('hidden');
+        }
+    }, 500);
+}
+
 // --- Usage Stats & Rate Request ---
 function saveUsageStats() {
     chrome.storage.local.set({ [STORAGE_KEYS.USAGE_STATS]: usageStats }, () => {
@@ -922,12 +1010,19 @@ function saveUsageStats() {
     });
 }
 
+// Check if we should show the rating request
 function checkAndShowRateRequest() {
-    if ($.rateRequest && usageStats.cleanCount >= REVIEW_REQUEST_THRESHOLD && !usageStats.reviewRequested) {
-        $.rateRequest.classList.remove('hidden');
-    } else if ($.rateRequest) {
-        $.rateRequest.classList.add('hidden');
-    }
+    // Show rating after 3+ cleans if it hasn't been shown before
+    chrome.storage.local.get([STORAGE_KEYS.RATING_SHOWN], (data) => {
+        const hasShownRating = data?.[STORAGE_KEYS.RATING_SHOWN] === true;
+
+        if (usageStats.cleanCount >= 3 && !hasShownRating) {
+            const ratingSection = document.getElementById('ratingSection');
+            if (ratingSection && ratingSection.classList.contains('hidden')) {
+                ratingSection.classList.remove('hidden');
+            }
+        }
+    });
 }
 
 // --- Data Count Fetching Functions ---
