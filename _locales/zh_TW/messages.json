@@ -1,6 +1,6 @@
 {
   "appName": {
-    "message": "快取清理工具"
+    "message": "快取清理工具 - Cache Cleaner"
   },
   "shortDesc": {
     "message": "使用快取清理工具：清除快取、清除 cookies 並清理瀏覽器歷史紀錄，以獲得更快速、安全的瀏覽體驗。"

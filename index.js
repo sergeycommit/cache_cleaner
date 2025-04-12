@@ -1,1 +1,1 @@
-console.log('Cache Cleaner ✨')
+console.log('Happy developing ✨')

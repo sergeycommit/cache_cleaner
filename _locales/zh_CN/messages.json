@@ -1,6 +1,6 @@
 {
   "appName": {
-    "message": "缓存清理器"
+    "message": "缓存清理器 - Cache Cleaner"
   },
   "shortDesc": {
     "message": "使用缓存清理器：清除 Chrome 缓存、清除 cookies 并清理浏览器历史记录，以获得更快、更安全的浏览体验。"

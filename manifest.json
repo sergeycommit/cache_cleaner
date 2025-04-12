@@ -12,8 +12,7 @@
     "cookies",
     "browsingData",
     "history",
-    "notifications",
-    "clipboardWrite"
+    "notifications"
   ],
   "host_permissions": [
     "<all_urls>"
@@ -36,7 +35,7 @@
   },
   "web_accessible_resources": [
     {
-      "resources": [ "images/icon128.png", "images/icon_error_128.png" ],
+      "resources": [ "images/icon128.png", "images/icon_error_128.png", "fonts/fa-solid-900.woff2"],
       "matches": [ "<all_urls>" ]
     }
   ]
