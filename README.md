@@ -1,7 +1,7 @@
 # 🎉 Cache Cleaner Installed
 
-📌 Click the puzzle piece (1) in the top right of your browser. Then, click  
-the little pin (2) next to the extension:
+Click the puzzle piece 🧩 (1) in the top right of your browser. Then, click<br>
+the little pin 📌 (2) next to the extension:
 
 ![Step 1](images/wp1.png)
 
