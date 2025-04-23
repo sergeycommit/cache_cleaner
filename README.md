@@ -1,4 +1,4 @@
-# ✅ Cache Cleaner Installed
+# 🎉 Cache Cleaner Installed
 
 📌 Click the puzzle piece (1) in the top right of your browser. Then, click  
 the little pin (2) next to the extension:
