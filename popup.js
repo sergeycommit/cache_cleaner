@@ -1,4 +1,4 @@
-/// popup.js - Rewritten (v3)
+//// popup.js - Rewritten (v3)
 
 // --- Constants ---
 const STORAGE_KEYS = { PREFERENCES: 'preferences', USAGE_STATS: 'usageStats', THEME: 'theme', CLEANING_FLAG: 'isCleaning', RATING_SHOWN: 'ratingShown', LAST_RATING_PROMPT: 'lastRatingPrompt'};
@@ -41,9 +41,28 @@ const SELECTORS = {
     infoIcons: '.info-icon',
     optionRows: '.option-row',
     ratingSection: '#ratingSection',
-    ratingStars: '.rating-group input'
+    ratingDivider: '#ratingDivider',
+    ratingStars: '.rating-star',
+    ratingClose: '#ratingClose',
+    // Share related selectors
+    shareButton: '#shareButton',
+    shareDialog: '#shareDialog',
+    closeShareBtn: '#closeShareBtn',
+    shareUrl: '#shareUrl',
+    copyShareUrlBtn: '#copyShareUrlBtn',
+    copyConfirmation: '#copyConfirmation',
+    shareTwitterBtn: '#shareTwitterBtn',
+    shareFacebookBtn: '#shareFacebookBtn',
+    shareEmailBtn: '#shareEmailBtn',
 };
 const $ = {}; // Object to cache DOM elements
+
+// Share links and information constants
+const SHARE_INFO = {
+    url: 'https://chromewebstore.google.com/detail/fgggiddcalbfbchppcmfaldmnfmmneof',
+    title: 'Cache Cleaner - Browser Data Cleaner Extension',
+    text: 'This browser extension quickly cleans cookies, local storage and other browser data with one click. Try it!'
+};
 
 // --- State ---
 let currentPreferences = { ...DEFAULT_PREFERENCES };
@@ -55,6 +74,7 @@ let tooltipTimeout = null;
 let cleanBtnTimeout = null;
 let currentTooltipTarget = null;
 let ignoreNextStorageChange = false; // Flag to ignore next storage change event
+let copyConfirmationTimeout = null;
 
 // --- Helper Functions ---
 function getElement(selector) { return document.querySelector(selector); }
@@ -71,6 +91,19 @@ function escapeHtml(unsafe) {
         .replace(/"/g, "&quot;")
         .replace(/'/g, "&#039;");
 }
+
+// Check if a URL is a restricted page like Chrome Web Store
+function isRestrictedPage(url) {
+    if (!url) return false;
+    return url.includes('chrome.google.com/webstore') ||
+        url.includes('chromewebstore.google.com') ||
+        url.includes('addons.mozilla.org') ||
+        url.includes('chrome://') ||
+        url.includes('edge://') ||
+        url.includes('about:') ||
+        url.includes('file://');
+}
+
 // --- Initialization ---
 document.addEventListener('DOMContentLoaded', async () => {
     try {
@@ -82,7 +115,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         addRuntimeMessageListener();
         addStorageListener();
         updateCleanButtonState();
-        setupRatingStars();
+        initRatingSection();
     } catch (error) {
         console.error("Popup Initialization Failed:", error);
         displayFatalError(`Initialization failed: ${error.message}`);
@@ -117,7 +150,7 @@ function cacheDOMElements() {
 
 async function loadAppState() {
     return new Promise((resolve, reject) => {
-        chrome.storage.local.get([STORAGE_KEYS.THEME, STORAGE_KEYS.PREFERENCES, STORAGE_KEYS.USAGE_STATS, STORAGE_KEYS.CLEANING_FLAG], (data) => {
+        chrome.storage.local.get([STORAGE_KEYS.THEME, STORAGE_KEYS.PREFERENCES, STORAGE_KEYS.USAGE_STATS, STORAGE_KEYS.CLEANING_FLAG, STORAGE_KEYS.RATING_SHOWN], (data) => {
             try {
                 if (chrome.runtime.lastError) {
                     throw new Error(`Error loading app state: ${chrome.runtime.lastError.message}`);
@@ -196,12 +229,21 @@ async function checkActiveTabAndUpdateUI() {
         const tab = tabs[0];
         activeTabInfo = { id: tab.id, url: tab.url };
 
-        if (!tab.url || !tab.url.startsWith('http')) {
-            const message = tab.url?.startsWith('chrome://') || tab.url?.startsWith('edge://') || tab.url?.startsWith('about:')
-                ? "Cleaning options for this tab are disabled on browser internal pages."
-                : tab.url?.startsWith('file://')
-                    ? "Cleaning options for this tab are disabled on local files."
-                    : "Cleaning options for this tab are disabled on this page type.";
+        if (!tab.url || !tab.url.startsWith('http') || isRestrictedPage(tab.url)) {
+            let message = "Cleaning options for this tab are disabled.";
+
+            if (tab.url) {
+                if (tab.url.includes('chrome.google.com/webstore') || tab.url.includes('chromewebstore.google.com')) {
+                    message = "Cleaning options are disabled on Chrome Web Store pages.";
+                } else if (tab.url.includes('addons.mozilla.org')) {
+                    message = "Cleaning options are disabled on Mozilla Add-ons pages.";
+                } else if (tab.url.startsWith('chrome://') || tab.url.startsWith('edge://') || tab.url.startsWith('about:')) {
+                    message = "Cleaning options are disabled on browser internal pages.";
+                } else if (tab.url.startsWith('file://')) {
+                    message = "Cleaning options are disabled on local files.";
+                }
+            }
+
             setTabSpecificOptionsEnabled(false, message);
             $.dataFetchError?.classList.add('hidden');
         } else {
@@ -247,6 +289,14 @@ function setTabSpecificOptionsEnabled(enabled, message = "") {
 async function fetchAndDisplayDataCounts(tab) {
     if (!tab || !tab.id) return;
 
+    // Check if we're on a restricted page first
+    if (tab.url && isRestrictedPage(tab.url)) {
+        updateDataCountUI('cookiesCount', '(N/A)');
+        updateDataCountUI('localStorageCount', '(N/A)');
+        updateDataCountUI('sessionStorageCount', '(N/A)');
+        return;
+    }
+
     let fetchErrorOccurred = false;
     let isErrorPage = false;
     const counts = { cookies: '...', localStorage: '...', sessionStorage: '...' };
@@ -266,15 +316,15 @@ async function fetchAndDisplayDataCounts(tab) {
             console.warn("Count Error (Local):", e.message);
             counts.localStorage = '?';
             fetchErrorOccurred = true;
-            if (e.message.includes("error page")) isErrorPage = true;
-            if ($.localStorageCount) $.localStorageCount.dataset.errorType = e.message.includes("error page") ? 'error-page' : 'other-error';
+            if (e.message.includes("error page") || e.message.includes("cannot be scripted")) isErrorPage = true;
+            if ($.localStorageCount) $.localStorageCount.dataset.errorType = e.message.includes("error page") || e.message.includes("cannot be scripted") ? 'error-page' : 'other-error';
         }),
         getStorageCount(tab.id, 'sessionStorage').then(c => counts.sessionStorage = c).catch(e => {
             console.warn("Count Error (Session):", e.message);
             counts.sessionStorage = '?';
             fetchErrorOccurred = true;
-            if (e.message.includes("error page")) isErrorPage = true;
-            if ($.sessionStorageCount) $.sessionStorageCount.dataset.errorType = e.message.includes("error page") ? 'error-page' : 'other-error';
+            if (e.message.includes("error page") || e.message.includes("cannot be scripted")) isErrorPage = true;
+            if ($.sessionStorageCount) $.sessionStorageCount.dataset.errorType = e.message.includes("error page") || e.message.includes("cannot be scripted") ? 'error-page' : 'other-error';
         })
     ];
 
@@ -285,8 +335,8 @@ async function fetchAndDisplayDataCounts(tab) {
     updateDataCountUI('localStorageCount', counts.localStorage);
     updateDataCountUI('sessionStorageCount', counts.sessionStorage);
 
-    // Don't show error message for error pages
-    $.dataFetchError?.classList.toggle('hidden', !fetchErrorOccurred || isErrorPage);
+    // Don't show error message for error pages or restricted pages
+    $.dataFetchError?.classList.toggle('hidden', !fetchErrorOccurred || isErrorPage || isRestrictedPage(tab.url));
 }
 
 function updateDataCountUI(elementId, count) {
@@ -299,11 +349,11 @@ function updateDataCountUI(elementId, count) {
         element.textContent = '...';
     }
     else if (count === '?') {
-        if (activeTabInfo?.url && (
+        if ((activeTabInfo?.url && (
             activeTabInfo.url.includes('chrome-error:') ||
-            element.dataset.errorType === 'error-page'
-        )) {
-            // Error page - show N/A
+            isRestrictedPage(activeTabInfo.url)
+        )) || element.dataset.errorType === 'error-page') {
+            // Error page or restricted page - show N/A
             element.textContent = '(N/A)';
             element.classList.add('unavailable');
         } else {
@@ -314,6 +364,10 @@ function updateDataCountUI(elementId, count) {
             element.appendChild(errorIcon);
             element.classList.add('error-icon');
         }
+    }
+    else if (count === '(N/A)') {
+        element.textContent = '(N/A)';
+        element.classList.add('unavailable');
     }
     else if (typeof count === 'number' && count >= 0) {
         element.textContent = `(${count})`;
@@ -349,6 +403,27 @@ function addEventListeners() {
     $.closeSummaryBtn?.addEventListener('click', () => $.summaryElement?.classList.add('hidden'));
     $.closeErrorBtn?.addEventListener('click', () => $.errorElement?.classList.add('hidden'));
     document.body.addEventListener('scroll', handleBodyScroll, { capture: true, passive: true });
+
+    // Rating section event listeners
+    $.ratingClose?.addEventListener('click', handleRatingClose);
+    $.ratingStars?.forEach(star => {
+        star.addEventListener('click', handleRatingClick);
+    });
+
+    // Share functionality event listeners
+    $.shareButton?.addEventListener('click', handleShareButtonClick);
+    $.closeShareBtn?.addEventListener('click', closeShareDialog);
+    $.copyShareUrlBtn?.addEventListener('click', handleCopyShareUrl);
+    $.shareTwitterBtn?.addEventListener('click', () => shareOnSocialMedia('twitter'));
+    $.shareFacebookBtn?.addEventListener('click', () => shareOnSocialMedia('facebook'));
+    $.shareEmailBtn?.addEventListener('click', () => shareOnSocialMedia('email'));
+
+    // Close share dialog when clicking outside
+    window.addEventListener('click', (e) => {
+        if ($.shareDialog && !$.shareDialog.classList.contains('hidden') && e.target === $.shareDialog) {
+            closeShareDialog();
+        }
+    });
 }
 
 // --- Event Handlers ---
@@ -404,35 +479,15 @@ function handleBodyClick(e) {
     const toggleTarget = e.target.closest('.toggle-switch');
     const infoIconTarget = e.target.closest('.info-icon');
     const collapsibleHeader = e.target.closest('.collapsible-header');
-    const ratingLabel = e.target.closest('.rating-group label');
-    const ratingInput = e.target.closest('.rating-group input');
+    const ratingStarTarget = e.target.closest('.rating-star');
+
+    if (ratingStarTarget) {
+        // Rating functionality is handled separately
+        return;
+    }
 
     if (infoIconTarget || e.target === $.infoTooltip) { e.stopPropagation(); return; }
     if (collapsibleHeader) { toggleCollapsibleSection(collapsibleHeader); return; }
-
-    // Handle rating input clicks
-    if (ratingLabel) {
-        e.preventDefault(); // Prevent default anchor behavior
-        const inputId = ratingLabel.getAttribute('for');
-        if (inputId) {
-            const input = document.getElementById(inputId);
-            if (input) {
-                input.checked = true;
-
-                // Record the rating
-                if (input.value) {
-                    recordRating(parseInt(input.value, 10));
-                }
-
-                // Open the link
-                const anchor = ratingLabel.querySelector('a');
-                if (anchor && anchor.href) {
-                    window.open(anchor.href, '_blank');
-                }
-            }
-        }
-        return;
-    }
 
     if (labelTarget || (toggleTarget && !e.target.matches('input[type="checkbox"]'))) {
         const row = e.target.closest('.option-row');
@@ -500,6 +555,139 @@ function handleBodyScroll() {
     }
 }
 
+// --- Share Functions ---
+
+function handleShareButtonClick() {
+    if ($.shareDialog) {
+        $.shareDialog.classList.remove('hidden');
+
+        // Focus on the share URL input for better usability
+        setTimeout(() => {
+            if ($.shareUrl) {
+                $.shareUrl.focus();
+                $.shareUrl.select();
+            }
+        }, 100);
+    }
+}
+
+function closeShareDialog() {
+    if ($.shareDialog) {
+        $.shareDialog.classList.add('hidden');
+        if ($.copyConfirmation) {
+            $.copyConfirmation.classList.add('hidden');
+        }
+    }
+}
+
+function handleCopyShareUrl() {
+    if (!$.shareUrl || !$.copyConfirmation) return;
+
+    const url = $.shareUrl.value;
+
+    navigator.clipboard.writeText(url).then(() => {
+        // Show copy confirmation message
+        $.copyConfirmation.classList.remove('hidden');
+
+        // Hide the confirmation after some time
+        clearTimeout(copyConfirmationTimeout);
+        copyConfirmationTimeout = setTimeout(() => {
+            $.copyConfirmation.classList.add('hidden');
+        }, 2000);
+    }).catch(err => {
+        console.error('Copy failed:', err);
+    });
+}
+
+function shareOnSocialMedia(platform) {
+    let shareUrl = '';
+    const extensionUrl = encodeURIComponent(SHARE_INFO.url);
+    const shareText = encodeURIComponent(SHARE_INFO.text);
+    const shareTitle = encodeURIComponent(SHARE_INFO.title);
+
+    switch (platform) {
+        case 'twitter':
+            shareUrl = `https://twitter.com/intent/tweet?text=${shareText}&url=${extensionUrl}`;
+            break;
+        case 'facebook':
+            shareUrl = `https://www.facebook.com/sharer/sharer.php?u=${extensionUrl}`;
+            break;
+        case 'email':
+            shareUrl = `mailto:?subject=${shareTitle}&body=${shareText}%20${extensionUrl}`;
+            break;
+        default:
+            return;
+    }
+
+    // Open the share URL in a new tab
+    chrome.tabs.create({ url: shareUrl });
+
+    // Close the share dialog
+    closeShareDialog();
+}
+
+// --- Rating Functions ---
+
+function initRatingSection() {
+    if (!$.ratingSection) return;
+
+    chrome.storage.local.get([STORAGE_KEYS.RATING_SHOWN, STORAGE_KEYS.LAST_RATING_PROMPT], (data) => {
+        // If rating has been shown and acknowledged or dismissed before, don't show it again
+        if (data[STORAGE_KEYS.RATING_SHOWN] === true) {
+            $.ratingSection.classList.add('hidden');
+            return;
+        }
+
+        // Check if we should show the rating prompt based on usage
+        if (usageStats.cleanCount >= 3) {
+            // Only show every 30 days if user hasn't rated yet
+            const lastPrompt = data[STORAGE_KEYS.LAST_RATING_PROMPT] || 0;
+            const daysSinceLastPrompt = (Date.now() - lastPrompt) / (1000 * 60 * 60 * 24);
+
+            if (daysSinceLastPrompt >= 30 || !lastPrompt) {
+                $.ratingSection.classList.remove('hidden');
+                // Update the last prompt timestamp
+                chrome.storage.local.set({ [STORAGE_KEYS.LAST_RATING_PROMPT]: Date.now() });
+            } else {
+                $.ratingSection.classList.add('hidden');
+            }
+        } else {
+            // Not enough usage yet
+            $.ratingSection.classList.add('hidden');
+        }
+    });
+}
+
+function handleRatingClick(e) {
+    e.preventDefault();
+    const starValue = parseInt(e.currentTarget.dataset.value || "0", 10);
+
+    // Mark that rating has been shown and interacted with
+    chrome.storage.local.set({ [STORAGE_KEYS.RATING_SHOWN]: true });
+
+    // Hide the rating section
+    $.ratingSection.classList.add('hidden');
+
+    // Redirect based on rating value
+    let redirectUrl = '';
+    if (starValue >= 4) {
+        redirectUrl = 'https://chromewebstore.google.com/detail/fgggiddcalbfbchppcmfaldmnfmmneof/reviews';
+    } else {
+        redirectUrl = 'https://docs.google.com/forms/d/e/1FAIpQLSfMhxA90yHeCzM--GsPpnqlf_d9Rjm8N5jB0c52YyOst9MWdg/viewform';
+    }
+
+    chrome.tabs.create({ url: redirectUrl });
+}
+
+function handleRatingClose() {
+    // Just mark that prompt was shown but user chose not to rate
+    chrome.storage.local.set({
+        [STORAGE_KEYS.LAST_RATING_PROMPT]: Date.now() // Remember when we showed it
+    });
+
+    $.ratingSection.classList.add('hidden');
+}
+
 // --- Message & Storage Listeners ---
 
 function addRuntimeMessageListener() {
@@ -532,7 +720,7 @@ function handleCleaningComplete(message) {
     displayResults(message.success, message.summary || [], message.errors || []);
 
     // Update data counts
-    if (activeTabInfo && activeTabInfo.id && activeTabInfo.url?.startsWith('http')) {
+    if (activeTabInfo && activeTabInfo.id && activeTabInfo.url?.startsWith('http') && !isRestrictedPage(activeTabInfo.url)) {
         fetchAndDisplayDataCounts(activeTabInfo);
     }
 
@@ -573,8 +761,9 @@ function handleCleaningComplete(message) {
         `;
         usageStats.cleanCount++;
         saveUsageStats();
-        // Проверяем необходимость показа рейтинга
-        checkAndShowRateRequest();
+
+        // Check for rating prompt
+        checkAndShowRatingPrompt();
 
         // Set timer to return to normal state
         cleanBtnTimeout = setTimeout(() => {
@@ -582,6 +771,16 @@ function handleCleaningComplete(message) {
             updateCleanButtonState();
         }, 2000);
     }
+}
+
+function checkAndShowRatingPrompt() {
+    // If user has cleaned 3 or more times and hasn't rated yet, show the rating prompt
+    chrome.storage.local.get([STORAGE_KEYS.RATING_SHOWN], (data) => {
+        if (usageStats.cleanCount >= 3 && !data[STORAGE_KEYS.RATING_SHOWN]) {
+            // Check if rating section should be shown
+            initRatingSection();
+        }
+    });
 }
 
 function setButtonVisualState(state, text = '') {
@@ -656,7 +855,7 @@ function addStorageListener() {
                     console.log(`Popup: Cleaning flag changed to ${flagSaysIsCleaning}. Syncing state.`);
                     isCleaningInProgress = flagSaysIsCleaning;
                     updateCleanButtonState();
-                    if (!isCleaningInProgress && activeTabInfo?.url?.startsWith('http')) {
+                    if (!isCleaningInProgress && activeTabInfo?.url?.startsWith('http') && !isRestrictedPage(activeTabInfo.url)) {
                         fetchAndDisplayDataCounts(activeTabInfo);
                     }
                 }
@@ -741,7 +940,6 @@ async function handleCleanButtonClick() {
         // Update usage stats
         usageStats.cleanCount++;
         saveUsageStats();
-        checkAndShowRateRequest();
 
     } catch (error) {
         console.error("Popup: Error during cleaning:", error);
@@ -958,70 +1156,10 @@ function resetButtonState() {
     updateCleanButtonState();
 }
 
-// --- Rating Stars Functions ---
-function setupRatingStars() {
-    if (!$.ratingStars) return;
-
-    // Make all ratings interactive
-    const stars = document.querySelectorAll('.rating-group input');
-    stars.forEach(star => {
-        star.addEventListener('change', (e) => {
-            const rating = parseInt(e.target.value, 10);
-            if (!isNaN(rating)) {
-                recordRating(rating);
-
-                // Open appropriate URL
-                if (rating >= 4) {
-                    // Good rating - open Chrome Web Store
-                    window.open('https://chromewebstore.google.com/detail/cache-cleaner/deadjnaenmndpdpakgchpbedlcdmmoai/reviews', '_blank');
-                } else {
-                    // Lower rating - open feedback form
-                    window.open('https://docs.google.com/forms/d/e/1FAIpQLSfMhxA90yHeCzM--GsPpnqlf_d9Rjm8N5jB0c52YyOst9MWdg/viewform?usp=dialog', '_blank');
-                }
-            }
-        });
-    });
-}
-
-function recordRating(rating) {
-    // Save the rating information to storage
-    chrome.storage.local.set({
-        [STORAGE_KEYS.RATING_SHOWN]: true,
-        userRating: rating,
-        ratingTimestamp: Date.now()
-    }, () => {
-        if (chrome.runtime.lastError) {
-            console.error("Error saving rating data:", chrome.runtime.lastError);
-        }
-    });
-
-    // Hide rating section after a small delay
-    setTimeout(() => {
-        if ($.ratingSection) {
-            $.ratingSection.classList.add('hidden');
-        }
-    }, 500);
-}
-
-// --- Usage Stats & Rate Request ---
+// --- Usage Stats ---
 function saveUsageStats() {
     chrome.storage.local.set({ [STORAGE_KEYS.USAGE_STATS]: usageStats }, () => {
         if (chrome.runtime.lastError) console.error("Error saving usage stats:", chrome.runtime.lastError);
-    });
-}
-
-// Check if we should show the rating request
-function checkAndShowRateRequest() {
-    // Show rating after 3+ cleans if it hasn't been shown before
-    chrome.storage.local.get([STORAGE_KEYS.RATING_SHOWN], (data) => {
-        const hasShownRating = data?.[STORAGE_KEYS.RATING_SHOWN] === true;
-
-        if (usageStats.cleanCount >= 3 && !hasShownRating) {
-            const ratingSection = document.getElementById('ratingSection');
-            if (ratingSection && ratingSection.classList.contains('hidden')) {
-                ratingSection.classList.remove('hidden');
-            }
-        }
     });
 }
 
@@ -1029,6 +1167,12 @@ function checkAndShowRateRequest() {
 async function getCookieCount(tab) {
     if (typeof chrome.cookies?.getAll !== 'function') throw new Error("Missing 'cookies' permission or API unavailable.");
     if (!tab || !tab.url) throw new Error("Invalid tab info for cookie count.");
+
+    // Don't try to count cookies on restricted pages
+    if (isRestrictedPage(tab.url)) {
+        return '(N/A)';
+    }
+
     try {
         let url; try { url = new URL(tab.url); } catch (e) { throw new Error(`Invalid tab URL: ${tab.url}`); }
         const queryDetails = url.protocol.startsWith('http') && url.hostname ? { domain: url.hostname } : { url: tab.url };
@@ -1040,7 +1184,16 @@ async function getCookieCount(tab) {
 async function getStorageCount(tabId, storageType) {
     if (typeof chrome.scripting?.executeScript !== 'function') throw new Error("Missing 'scripting' permission or API unavailable.");
     if (!tabId) throw new Error("Invalid tabId for storage count.");
+
     try {
+        // Check if we can access the tab first
+        const tab = await chrome.tabs.get(tabId);
+
+        // Don't try to get storage count on restricted pages
+        if (tab.url && isRestrictedPage(tab.url)) {
+            return '(N/A)';
+        }
+
         const results = await chrome.scripting.executeScript({
             target: { tabId: tabId }, injectImmediately: true,
             func: (sType) => {
@@ -1081,6 +1234,9 @@ async function getStorageCount(tabId, storageType) {
         }
         else if (msg.includes("showing error page")) {
             msg = `Page is showing an error (${storageType}).`;
+        }
+        else if (msg.includes("cannot be scripted")) {
+            msg = `Page cannot be scripted (${storageType}).`;
         }
         else if (msg.includes("Cannot inject") || msg.includes("Cannot access") ||
             msg.includes("chrome://") || msg.includes("file://")) {

@@ -14,6 +14,7 @@
     --error-color-dark-text: #f5c6cb; --error-color-dark-bg: rgba(248, 215, 218, 0.15); --error-color-dark-border: rgba(245, 198, 203, 0.3);
     --border-light: #dee2e6; --border-dark: #495057; --shadow-light: 0 2px 5px rgba(0, 0, 0, 0.06); --shadow-dark: 0 3px 8px rgba(0, 0, 0, 0.25);
     --border-radius: 8px; --transition: all 0.2s ease-in-out; --tooltip-bg: #333; --tooltip-text: #fff;
+    --twitter-color: #1da1f2; --facebook-color: #4267B2; --email-color: #555;
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', system-ui, -apple-system, BlinkMacSystemFont, sans-serif; }
@@ -24,8 +25,8 @@ body.dark-mode { background-color: var(--background-dark); color: var(--text-dar
 .visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 button:focus-visible, select:focus-visible, input[type="checkbox"]:focus-visible + .slider, input[type="text"]:focus-visible, .collapsible-header:focus-visible { outline: 2px solid var(--primary-color); outline-offset: 2px; box-shadow: none; }
 /* Стили для focus-visible кнопки темы */
-.theme-toggle:focus-visible { outline: 2px solid var(--primary-color); outline-offset: 1px; background-color: rgba(0, 0, 0, 0.05); }
-body.dark-mode .theme-toggle:focus-visible { background-color: rgba(255, 255, 255, 0.1); }
+.theme-toggle:focus-visible, .share-button:focus-visible { outline: 2px solid var(--primary-color); outline-offset: 1px; background-color: rgba(0, 0, 0, 0.05); }
+body.dark-mode .theme-toggle:focus-visible, body.dark-mode .share-button:focus-visible { background-color: rgba(255, 255, 255, 0.1); }
 
 /* --- Tooltip --- */
 .tooltip { position: fixed; background-color: var(--tooltip-bg); color: var(--tooltip-text); padding: 6px 10px; border-radius: 4px; font-size: 12px; line-height: 1.4; pointer-events: none; opacity: 0; transform: translateY(5px) scale(0.95); transition: opacity 0.15s ease-out, transform 0.15s ease-out; z-index: 1000; max-width: 200px; text-align: left; box-shadow: 0 2px 5px rgba(0,0,0,0.2); } .tooltip.show { opacity: 1; transform: translateY(0) scale(1); } .tooltip[aria-hidden="true"] { opacity: 0; transform: translateY(5px) scale(0.95); pointer-events: none; }
@@ -34,19 +35,39 @@ header { display: flex; justify-content: space-between; align-items: center; mar
 .app-info { display: flex; align-items: center; gap: 8px; flex-grow: 1; overflow: hidden; }
 .logo { width: 24px; height: 24px; flex-shrink: 0;}
 h1 { font-size: 17px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: inherit;}
-/* Стили для кнопки темы */
-.theme-toggle { background: transparent; border: none; color: var(--text-muted-light); font-size: 16px; cursor: pointer; padding: 5px; border-radius: 50%; transition: var(--transition); margin-left: 4px; flex-shrink: 0;}
-.theme-toggle:hover { color: var(--text-light); background-color: rgba(0, 0, 0, 0.05); }
-body.dark-mode .theme-toggle { color: var(--text-muted-dark); }
-body.dark-mode .theme-toggle:hover { color: var(--text-dark); background-color: rgba(255, 255, 255, 0.1); }
-/* Стили для кнопки "Поделиться" удалены */
 
+/* Header actions container */
+.header-actions { display: flex; align-items: center; gap: 6px; }
+
+/* Styles for the theme and share buttons */
+.theme-toggle, .share-button {
+    background: transparent;
+    border: none;
+    color: var(--text-muted-light);
+    font-size: 16px;
+    cursor: pointer;
+    padding: 5px;
+    border-radius: 50%;
+    transition: var(--transition);
+    flex-shrink: 0;
+}
+.theme-toggle:hover, .share-button:hover {
+    color: var(--text-light);
+    background-color: rgba(0, 0, 0, 0.05);
+}
+body.dark-mode .theme-toggle, body.dark-mode .share-button {
+    color: var(--text-muted-dark);
+}
+body.dark-mode .theme-toggle:hover, body.dark-mode .share-button:hover {
+    color: var(--text-dark);
+    background-color: rgba(255, 255, 255, 0.1);
+}
 /* --- Status Messages --- */
 .status-message { padding: 8px 12px; border-radius: var(--border-radius); font-size: 13px; margin-bottom: 10px; display: flex; align-items: center; gap: 8px; border: 1px solid; transition: opacity 0.3s ease, max-height 0.3s ease, margin 0.3s ease, padding 0.3s ease, border 0.3s ease; overflow: hidden; max-height: 100px; } .status-message.hidden { opacity: 0; max-height: 0; padding-top: 0; padding-bottom: 0; margin-bottom: 0; border-width: 0; animation: fadeOut 0.3s ease forwards; } .status-message:not(.hidden) { animation: fadeInMessage 0.3s ease forwards; } @keyframes fadeInMessage { from { opacity: 0; max-height: 0; padding-top: 0; padding-bottom: 0; margin-bottom: 0; border-width: 0; } to { opacity: 1; max-height: 100px; padding-top: 8px; padding-bottom: 8px; margin-bottom: 10px; border-width: 1px; } } @keyframes fadeOut { from { opacity: 1; max-height: 100px; padding-top: 8px; padding-bottom: 8px; margin-bottom: 10px; border-width: 1px; } to { opacity: 0; max-height: 0; padding-top: 0; padding-bottom: 0; margin-bottom: 0; border-width: 0; } }
 .status-message i { font-size: 14px; flex-shrink: 0; }
 .status-message.warning { color: var(--warning-color-light-text); background-color: var(--warning-color-light-bg); border-color: var(--warning-color-light-border); }
 .status-message.info { color: var(--info-color-light-text); background-color: var(--info-color-light-bg); border-color: var(--info-color-light-border); }
-.status-message.success { color: var(--success-color-light-text); background-color: var(--success-color-light-bg); border-color: var(--success-color-light-border); } /* Стиль для #shareFeedback удален */
+.status-message.success { color: var(--success-color-light-text); background-color: var(--success-color-light-bg); border-color: var(--success-color-light-border); }
 .status-message.error { color: var(--error-color-light-text); background-color: var(--error-color-light-bg); border-color: var(--error-color-light-border); }
 body.dark-mode .status-message.warning { color: var(--warning-color-dark-text); background-color: var(--warning-color-dark-bg); border-color: var(--warning-color-dark-border); }
 body.dark-mode .status-message.info { color: var(--info-color-dark-text); background-color: var(--info-color-dark-bg); border-color: var(--info-color-dark-border); }
@@ -117,6 +138,7 @@ body.dark-mode .option-range-indicator { color: var(--text-muted-dark); }
     margin-top: 15px;
     padding: 10px 0;
     transition: all 0.3s ease;
+    position: relative;
 }
 
 .rating-section.hidden {
@@ -153,13 +175,8 @@ body.dark-mode .rating-divider {
 
 .full-stars .rating-group {
     display: inline-flex;
-    flex-direction: row; /* Changed from row-reverse to row for left-to-right */
     gap: 5px;
-}
-
-.full-stars input {
-    position: absolute;
-    left: -9999px;
+    flex-direction: row; /* Explicitly set to row to ensure correct order */
 }
 
 .full-stars label {
@@ -175,48 +192,270 @@ body.dark-mode .rating-divider {
 .full-stars label a svg {
     width: 24px;
     height: 24px;
-    fill: #ccc;
+    fill: #ffc107; /* Changed to yellow by default */
     transition: fill 0.2s ease;
 }
 
-/* When star is checked */
-.full-stars input:checked ~ label a svg {
+/* Changed hover logic to work from left to right */
+.full-stars .rating-group label a svg {
+    fill: #ffc107; /* All stars yellow by default */
+}
+
+/* Modified to fill stars from left to right on hover */
+.full-stars .rating-group label:hover a svg {
+    fill: #ffc107; /* Keep the hovered star yellow */
+}
+
+/* This is the key change - fill all stars to the LEFT of the hovered one */
+.full-stars .rating-group label:hover ~ label a svg {
+    fill: #ccc; /* Keep stars to the right unfilled */
+}
+
+/* Make sure stars to the left of hovered one are filled */
+.full-stars .rating-group:hover label:hover a svg,
+.full-stars .rating-group:hover label:nth-child(-n+5) a svg {
     fill: #ffc107;
 }
 
-/* When hovering over stars after the selected one, keep them lit */
-.full-stars .rating-group:hover label a svg {
-    fill: #ffdb70;
+.full-stars .rating-group:hover label:nth-child(1):hover ~ label a svg {
+    fill: #ccc; /* Only the first star filled */
 }
 
-/* When hovering, highlight stars from left up to where mouse is */
-.full-stars .rating-group label:hover ~ label a svg {
-    fill: #ccc; /* Reset stars that come after the hovered one */
+.full-stars .rating-group:hover label:nth-child(2):hover ~ label a svg {
+    fill: #ccc; /* Only the first two stars filled */
 }
 
-.full-stars .rating-group label:hover a svg {
-    fill: #ffc107; /* Highlight the hovered star */
+.full-stars .rating-group:hover label:nth-child(3):hover ~ label a svg {
+    fill: #ccc; /* Only the first three stars filled */
+}
+
+.full-stars .rating-group:hover label:nth-child(4):hover ~ label a svg {
+    fill: #ccc; /* Only the first four stars filled */
 }
 
 /* Dark mode adjustments */
 body.dark-mode .full-stars label a svg {
-    fill: #555;
-}
-
-body.dark-mode .full-stars input:checked ~ label a svg {
-    fill: #ffd740;
-}
-
-body.dark-mode .full-stars .rating-group:hover label a svg {
-    fill: #ffe57f;
-}
-
-body.dark-mode .full-stars .rating-group label:hover ~ label a svg {
-    fill: #555;
+    fill: #ffd740; /* Default yellow state in dark mode */
 }
 
 body.dark-mode .full-stars .rating-group label:hover a svg {
+    fill: #ffd740; /* Keep the hovered star yellow in dark mode */
+}
+
+body.dark-mode .full-stars .rating-group label:hover ~ label a svg {
+    fill: #555; /* Keep stars to the right unfilled in dark mode */
+}
+
+body.dark-mode .full-stars .rating-group:hover label:hover a svg,
+body.dark-mode .full-stars .rating-group:hover label:nth-child(-n+5) a svg {
     fill: #ffd740;
+}
+
+body.dark-mode .full-stars .rating-group:hover label:nth-child(1):hover ~ label a svg,
+body.dark-mode .full-stars .rating-group:hover label:nth-child(2):hover ~ label a svg,
+body.dark-mode .full-stars .rating-group:hover label:nth-child(3):hover ~ label a svg,
+body.dark-mode .full-stars .rating-group:hover label:nth-child(4):hover ~ label a svg {
+    fill: #555; /* Keep appropriate stars unfilled in dark mode */
+}
+
+/* --- Share Dialog --- */
+.share-dialog {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    transition: opacity 0.3s ease, visibility 0.3s ease;
+    opacity: 0;
+    visibility: hidden;
+}
+
+.share-dialog.hidden {
+    opacity: 0;
+    visibility: hidden;
+}
+
+.share-dialog:not(.hidden) {
+    opacity: 1;
+    visibility: visible;
+}
+
+.share-dialog-content {
+    width: 90%;
+    max-width: 300px;
+    background-color: var(--card-light);
+    border-radius: var(--border-radius);
+    box-shadow: var(--shadow-light);
+    border: 1px solid var(--border-light);
+    overflow: hidden;
+    transition: transform 0.3s ease;
+    transform: scale(0.95);
+}
+
+.share-dialog:not(.hidden) .share-dialog-content {
+    transform: scale(1);
+}
+
+body.dark-mode .share-dialog-content {
+    background-color: var(--card-dark);
+    border-color: var(--border-dark);
+    box-shadow: var(--shadow-dark);
+}
+
+.share-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 15px;
+    border-bottom: 1px solid var(--border-light);
+    background-color: rgba(0,0,0,0.02);
+}
+
+body.dark-mode .share-header {
+    border-bottom: 1px solid var(--border-dark);
+    background-color: rgba(255,255,255,0.03);
+}
+
+.share-header h3 {
+    font-size: 15px;
+    font-weight: 600;
+    margin: 0;
+}
+
+.share-body {
+    padding: 15px;
+}
+
+.share-body p {
+    font-size: 13px;
+    margin-bottom: 12px;
+    line-height: 1.4;
+}
+
+.share-url-container {
+    display: flex;
+    margin-bottom: 15px;
+    position: relative;
+}
+
+.share-url {
+    flex-grow: 1;
+    padding: 7px 10px;
+    border: 1px solid var(--border-light);
+    border-radius: var(--border-radius) 0 0 var(--border-radius);
+    font-size: 12px;
+    background-color: var(--background-light);
+    color: var(--text-light);
+}
+
+body.dark-mode .share-url {
+    border-color: var(--border-dark);
+    background-color: var(--background-dark);
+    color: var(--text-dark);
+}
+
+.copy-btn {
+    padding: 7px 12px;
+    border: 1px solid var(--border-light);
+    border-left: none;
+    border-radius: 0 var(--border-radius) var(--border-radius) 0;
+    background-color: var(--background-light);
+    color: var(--text-muted-light);
+    cursor: pointer;
+    transition: var(--transition);
+}
+
+.copy-btn:hover {
+    background-color: rgba(0,0,0,0.05);
+    color: var(--text-light);
+}
+
+body.dark-mode .copy-btn {
+    border-color: var(--border-dark);
+    background-color: var(--background-dark);
+    color: var(--text-muted-dark);
+}
+
+body.dark-mode .copy-btn:hover {
+    background-color: rgba(255,255,255,0.1);
+    color: var(--text-dark);
+}
+
+.share-buttons {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+    margin-bottom: 10px;
+}
+
+.social-share-btn {
+    padding: 8px 5px;
+    border: none;
+    border-radius: var(--border-radius);
+    font-size: 13px;
+    font-weight: 500;
+    color: #fff;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.social-share-btn:hover {
+    opacity: 0.9;
+    transform: translateY(-1px);
+}
+
+.social-share-btn:active {
+    transform: translateY(0);
+}
+
+.social-share-btn.twitter {
+    background-color: var(--twitter-color);
+}
+
+.social-share-btn.facebook {
+    background-color: var(--facebook-color);
+}
+
+.social-share-btn.email {
+    background-color: var(--email-color);
+}
+
+.social-share-btn i {
+    font-size: 14px;
+}
+
+.copy-confirmation {
+    background-color: var(--success-color-light-bg);
+    color: var(--success-color-light-text);
+    padding: 5px 10px;
+    border-radius: var(--border-radius);
+    font-size: 12px;
+    text-align: center;
+    margin-top: 5px;
+    opacity: 0;
+    height: 0;
+    overflow: hidden;
+    transition: opacity 0.3s ease, height 0.3s ease;
+}
+
+body.dark-mode .copy-confirmation {
+    background-color: var(--success-color-dark-bg);
+    color: var(--success-color-dark-text);
+}
+
+.copy-confirmation:not(.hidden) {
+    opacity: 1;
+    height: auto;
+    overflow: visible;
 }
 
 .hidden { display: none !important; }

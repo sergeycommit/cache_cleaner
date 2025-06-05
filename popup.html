@@ -14,10 +14,14 @@
             <img src="images/icon.png" alt="Cache Cleaner Logo" class="logo">
             <h1>Cache Cleaner</h1>
         </div>
-        <!-- Кнопка "Поделиться" удалена -->
-        <button id="themeToggle" class="theme-toggle" title="Toggle Theme" aria-label="Toggle Theme">
-            <i class="fas fa-moon"></i>
-        </button>
+        <div class="header-actions">
+            <button id="shareButton" class="share-button" title="Share Extension" aria-label="Share Extension">
+                <i class="fas fa-share-alt"></i>
+            </button>
+            <button id="themeToggle" class="theme-toggle" title="Toggle Theme" aria-label="Toggle Theme">
+                <i class="fas fa-moon"></i>
+            </button>
+        </div>
     </header>
 
     <!-- Сообщения -->
@@ -25,7 +29,6 @@
         <i class="fas fa-info-circle"></i> <span id="tabStatusText"></span>
     </div>
 
-    <!-- Сообщение об успешном копировании удалено -->
     <div id="dataFetchError" class="status-message error hidden" role="status">
         <i class="fas fa-exclamation-triangle"></i> <span>Could not retrieve data counts for this tab.</span>
     </div>
@@ -115,7 +118,6 @@
         </div> <!-- Конец card-content -->
     </div> <!-- Конец collapsible card -->
 
-
     <!-- Кнопка Очистки и Индикаторы Настроек -->
     <button id="cleanBtn" class="clean-btn" aria-live="polite">
         <!-- Содержимое кнопки управляется JS -->
@@ -144,52 +146,68 @@
         </div>
         <ul id="errorList"></ul>
     </div>
-    <!-- Rating Section -->
+
+    <!-- Rating Section в popup.html -->
     <div id="ratingSection" class="rating-section hidden">
-        <hr class="rating-divider">
-        <p class="rating-title">Rate us:</p>
+        <hr id="ratingDivider" class="rating-divider">
+        <h3 class="rating-title">How's your experience with Cache Cleaner?</h3>
         <div class="full-stars">
             <div class="rating-group">
-                <input name="fst" id="fst-1" value="1" type="radio" />
-                <label for="fst-1">
-                    <a href="https://docs.google.com/forms/d/e/1FAIpQLSfMhxA90yHeCzM--GsPpnqlf_d9Rjm8N5jB0c52YyOst9MWdg/viewform?usp=dialog" target="_blank">
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 576 512">
-                            <path d="M259.3 17.8L194 150.2 47.9 171.5c-26.2 3.8-36.7 36.1-17.7 54.6l105.7 103-25 145.5c-4.5 26.3 23.2 46 46.4 33.7L288 439.6l130.7 68.7c23.2 12.2 50.9-7.4 46.4-33.7l-25-145.5 105.7-103c19-18.5 8.5-50.8-17.7-54.6L382 150.2 316.7 17.8c-11.7-23.6-45.6-23.9-57.4 0z"/>
-                        </svg>
+                <label aria-label="1 star">
+                    <a href="#" class="rating-star" data-value="1">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 576 512"><path d="M259.3 17.8L194 150.2 47.9 171.5c-26.2 3.8-36.7 36.1-17.7 54.6l105.7 103-25 145.5c-4.5 26.3 23.2 46 46.4 33.7L288 439.6l130.7 68.7c23.2 12.2 50.9-7.4 46.4-33.7l-25-145.5 105.7-103c19-18.5 8.5-50.8-17.7-54.6L382 150.2 316.7 17.8c-11.7-23.6-45.6-23.9-57.4 0z"/></svg>
                     </a>
                 </label>
-                <input name="fst" id="fst-2" value="2" type="radio" />
-                <label for="fst-2">
-                    <a href="https://docs.google.com/forms/d/e/1FAIpQLSfMhxA90yHeCzM--GsPpnqlf_d9Rjm8N5jB0c52YyOst9MWdg/viewform?usp=dialog" target="_blank">
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 576 512">
-                            <path d="M259.3 17.8L194 150.2 47.9 171.5c-26.2 3.8-36.7 36.1-17.7 54.6l105.7 103-25 145.5c-4.5 26.3 23.2 46 46.4 33.7L288 439.6l130.7 68.7c23.2 12.2 50.9-7.4 46.4-33.7l-25-145.5 105.7-103c19-18.5 8.5-50.8-17.7-54.6L382 150.2 316.7 17.8c-11.7-23.6-45.6-23.9-57.4 0z"/>
-                        </svg>
+                <label aria-label="2 stars">
+                    <a href="#" class="rating-star" data-value="2">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 576 512"><path d="M259.3 17.8L194 150.2 47.9 171.5c-26.2 3.8-36.7 36.1-17.7 54.6l105.7 103-25 145.5c-4.5 26.3 23.2 46 46.4 33.7L288 439.6l130.7 68.7c23.2 12.2 50.9-7.4 46.4-33.7l-25-145.5 105.7-103c19-18.5 8.5-50.8-17.7-54.6L382 150.2 316.7 17.8c-11.7-23.6-45.6-23.9-57.4 0z"/></svg>
                     </a>
                 </label>
-                <input name="fst" id="fst-3" value="3" type="radio" />
-                <label for="fst-3">
-                    <a href="https://docs.google.com/forms/d/e/1FAIpQLSfMhxA90yHeCzM--GsPpnqlf_d9Rjm8N5jB0c52YyOst9MWdg/viewform?usp=dialog" target="_blank">
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 576 512">
-                            <path d="M259.3 17.8L194 150.2 47.9 171.5c-26.2 3.8-36.7 36.1-17.7 54.6l105.7 103-25 145.5c-4.5 26.3 23.2 46 46.4 33.7L288 439.6l130.7 68.7c23.2 12.2 50.9-7.4 46.4-33.7l-25-145.5 105.7-103c19-18.5 8.5-50.8-17.7-54.6L382 150.2 316.7 17.8c-11.7-23.6-45.6-23.9-57.4 0z"/>
-                        </svg>
+                <label aria-label="3 stars">
+                    <a href="#" class="rating-star" data-value="3">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 576 512"><path d="M259.3 17.8L194 150.2 47.9 171.5c-26.2 3.8-36.7 36.1-17.7 54.6l105.7 103-25 145.5c-4.5 26.3 23.2 46 46.4 33.7L288 439.6l130.7 68.7c23.2 12.2 50.9-7.4 46.4-33.7l-25-145.5 105.7-103c19-18.5 8.5-50.8-17.7-54.6L382 150.2 316.7 17.8c-11.7-23.6-45.6-23.9-57.4 0z"/></svg>
                     </a>
                 </label>
-                <input name="fst" id="fst-4" value="4" type="radio" />
-                <label for="fst-4">
-                    <a href="https://chromewebstore.google.com/detail/cache-cleaner/deadjnaenmndpdpakgchpbedlcdmmoai/reviews" target="_blank">
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 576 512">
-                            <path d="M259.3 17.8L194 150.2 47.9 171.5c-26.2 3.8-36.7 36.1-17.7 54.6l105.7 103-25 145.5c-4.5 26.3 23.2 46 46.4 33.7L288 439.6l130.7 68.7c23.2 12.2 50.9-7.4 46.4-33.7l-25-145.5 105.7-103c19-18.5 8.5-50.8-17.7-54.6L382 150.2 316.7 17.8c-11.7-23.6-45.6-23.9-57.4 0z"/>
-                        </svg>
+                <label aria-label="4 stars">
+                    <a href="#" class="rating-star" data-value="4">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 576 512"><path d="M259.3 17.8L194 150.2 47.9 171.5c-26.2 3.8-36.7 36.1-17.7 54.6l105.7 103-25 145.5c-4.5 26.3 23.2 46 46.4 33.7L288 439.6l130.7 68.7c23.2 12.2 50.9-7.4 46.4-33.7l-25-145.5 105.7-103c19-18.5 8.5-50.8-17.7-54.6L382 150.2 316.7 17.8c-11.7-23.6-45.6-23.9-57.4 0z"/></svg>
                     </a>
                 </label>
-                <input name="fst" id="fst-5" value="5" type="radio" />
-                <label for="fst-5">
-                    <a href="https://chromewebstore.google.com/detail/cache-cleaner/deadjnaenmndpdpakgchpbedlcdmmoai/reviews" target="_blank">
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 576 512">
-                            <path d="M259.3 17.8L194 150.2 47.9 171.5c-26.2 3.8-36.7 36.1-17.7 54.6l105.7 103-25 145.5c-4.5 26.3 23.2 46 46.4 33.7L288 439.6l130.7 68.7c23.2 12.2 50.9-7.4 46.4-33.7l-25-145.5 105.7-103c19-18.5 8.5-50.8-17.7-54.6L382 150.2 316.7 17.8c-11.7-23.6-45.6-23.9-57.4 0z"/>
-                        </svg>
+                <label aria-label="5 stars">
+                    <a href="#" class="rating-star" data-value="5">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 576 512"><path d="M259.3 17.8L194 150.2 47.9 171.5c-26.2 3.8-36.7 36.1-17.7 54.6l105.7 103-25 145.5c-4.5 26.3 23.2 46 46.4 33.7L288 439.6l130.7 68.7c23.2 12.2 50.9-7.4 46.4-33.7l-25-145.5 105.7-103c19-18.5 8.5-50.8-17.7-54.6L382 150.2 316.7 17.8c-11.7-23.6-45.6-23.9-57.4 0z"/></svg>
                     </a>
                 </label>
+            </div>
+        </div>
+        <button id="ratingClose" class="close-btn" style="position: absolute; top: 5px; right: 5px;" title="Close" aria-label="Close Rating">×</button>
+    </div>
+
+    <!-- Share Dialog -->
+    <div id="shareDialog" class="share-dialog hidden">
+        <div class="share-dialog-content">
+            <div class="share-header">
+                <h3>Share Cache Cleaner</h3>
+                <button id="closeShareBtn" class="close-btn" title="Close Share Dialog" aria-label="Close Share Dialog">×</button>
+            </div>
+            <div class="share-body">
+                <p>Share this extension with your friends and colleagues:</p>
+                <div class="share-url-container">
+                    <input type="text" id="shareUrl" class="share-url" value="https://chromewebstore.google.com/detail/fgggiddcalbfbchppcmfaldmnfmmneof" readonly>
+                    <button id="copyShareUrlBtn" class="copy-btn" title="Copy URL"><i class="fas fa-copy"></i></button>
+                </div>
+                <div class="share-buttons">
+                    <button id="shareTwitterBtn" class="social-share-btn twitter" title="Share on Twitter">
+                        <i class="fas fa-external-link-alt"></i> Twitter
+                    </button>
+                    <button id="shareFacebookBtn" class="social-share-btn facebook" title="Share on Facebook">
+                        <i class="fas fa-external-link-alt"></i> Facebook
+                    </button>
+                    <button id="shareEmailBtn" class="social-share-btn email" title="Share via Email">
+                        <i class="fas fa-envelope"></i> Email
+                    </button>
+                </div>
+                <div id="copyConfirmation" class="copy-confirmation hidden">URL copied to clipboard!</div>
             </div>
         </div>
     </div>
