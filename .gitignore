@@ -1,0 +1,11 @@
+# Jekyll files (not needed for Chrome Extension)
+_layouts/
+_config.yml
+index.html
+index.js
+
+# Development files
+.vscode/
+.git/
+node_modules/
+*.log
