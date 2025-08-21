@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Cache Cleaner Advanced</title>
     <link rel="stylesheet" href="popup.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.2.0/css/all.min.css">
 </head>
 <body>
 <div class="container">
@@ -15,21 +14,21 @@
             <h1>Cache Cleaner</h1>
         </div>
         <a id="shareBtn" class="share-btn" href="https://chromewebstore.google.com/detail/fgggiddcalbfbchppcmfaldmnfmmneof" target="_blank" rel="noopener noreferrer" title="Share us" aria-label="Share us">
-            <i class="fas fa-share-nodes"></i>
+            <i class="icon" data-icon="share" aria-hidden="true"></i>
         </a>
         <button id="themeToggle" class="theme-toggle" title="Toggle Theme" aria-label="Toggle Theme">
-            <i class="fas fa-moon"></i>
+            <i class="icon" data-icon="moon" aria-hidden="true"></i>
         </button>
     </header>
 
     <!-- Сообщения -->
     <div id="tabStatusMessage" class="status-message warning hidden" role="status">
-        <i class="fas fa-info-circle"></i> <span id="tabStatusText"></span>
+        <i class="icon" data-icon="info" aria-hidden="true"></i> <span id="tabStatusText"></span>
     </div>
 
     <!-- Сообщение об успешном копировании удалено -->
     <div id="dataFetchError" class="status-message error hidden" role="status">
-        <i class="fas fa-exclamation-triangle"></i> <span>Could not retrieve data counts for this tab.</span>
+        <i class="icon" data-icon="warning" aria-hidden="true"></i> <span>Could not retrieve data counts for this tab.</span>
     </div>
 
     <div id="infoTooltip" class="tooltip" role="tooltip" aria-hidden="true"></div>
@@ -37,7 +36,7 @@
     <!-- Данные Текущей Вкладки -->
     <div class="card" id="currentTabDataCard">
         <div class="card-header">
-            <i class="fas fa-globe"></i>
+            <i class="icon" data-icon="globe" aria-hidden="true"></i>
             <h2>Current Site</h2>
         </div>
         <div class="options">
@@ -45,7 +44,7 @@
                 <label for="cookies">
                     <span class="option-label">Cookies</span>
                     <span class="data-count" id="cookiesCount"></span>
-                    <i class="fas fa-info-circle info-icon" data-tooltip="Site data for logins, preferences, etc. Cleared only for the current site's domain." aria-label="Info about Cookies"></i>
+                    <i class="info-icon icon" data-icon="info" data-tooltip="Site data for logins, preferences, etc. Cleared only for the current site's domain." aria-label="Info about Cookies" aria-hidden="true"></i>
                 </label>
                 <div class="toggle-switch"><input type="checkbox" id="cookies"><span class="slider"></span></div>
             </div>
@@ -53,7 +52,7 @@
                 <label for="localStorage">
                     <span class="option-label">Local Storage</span>
                     <span class="data-count" id="localStorageCount"></span>
-                    <i class="fas fa-info-circle info-icon" data-tooltip="Data stored permanently by the site. Cleared only for the current site." aria-label="Info about Local Storage"></i>
+                    <i class="info-icon icon" data-icon="info" data-tooltip="Data stored permanently by the site. Cleared only for the current site." aria-label="Info about Local Storage" aria-hidden="true"></i>
                 </label>
                 <div class="toggle-switch"><input type="checkbox" id="localStorage"><span class="slider"></span></div>
             </div>
@@ -61,7 +60,7 @@
                 <label for="sessionStorage">
                     <span class="option-label">Session Storage</span>
                     <span class="data-count" id="sessionStorageCount"></span>
-                    <i class="fas fa-info-circle info-icon" data-tooltip="Temporary data stored by the site. Cleared only for the current site." aria-label="Info about Session Storage"></i>
+                    <i class="info-icon icon" data-icon="info" data-tooltip="Temporary data stored by the site. Cleared only for the current site." aria-label="Info about Session Storage" aria-hidden="true"></i>
                 </label>
                 <div class="toggle-switch"><input type="checkbox" id="sessionStorage"><span class="slider"></span></div>
             </div>
@@ -71,9 +70,9 @@
     <!-- Advanced Options (сворачиваемый блок) -->
     <div class="card collapsible collapsed" id="additionalOptionsCard">
         <div class="card-header collapsible-header" role="button" tabindex="0" aria-expanded="false" aria-controls="additionalOptionsContent">
-            <i class="fas fa-cog"></i>
+            <i class="icon" data-icon="sliders" aria-hidden="true"></i>
             <h2>Advanced Settings</h2>
-            <i class="fas fa-chevron-down collapse-icon"></i>
+            <i class="collapse-icon icon" data-icon="chevronDown" aria-hidden="true"></i>
         </div>
         <div class="card-content" id="additionalOptionsContent">
             <div class="options options-padded">
@@ -91,34 +90,46 @@
                 <!-- Global Cleaning Options -->
                 <div class="option-row">
                     <label for="cache"> Browser Cache <span class="option-range-indicator"></span>
-                        <i class="fas fa-info-circle info-icon" data-tooltip="Temporary internet files. Cleared for all sites based on selected time range." aria-label="Info about Browser Cache"></i>
+                        <i class="info-icon icon" data-icon="info" data-tooltip="Temporary internet files. Cleared for all sites based on selected time range." aria-label="Info about Browser Cache" aria-hidden="true"></i>
                     </label>
                     <div class="toggle-switch"><input type="checkbox" id="cache"><span class="slider"></span></div>
                 </div>
                 <div class="option-row">
                     <label for="indexedDB"> IndexedDB <span class="option-range-indicator"></span>
-                        <i class="fas fa-info-circle info-icon" data-tooltip="Databases used by web apps. Cleared for all sites based on selected time range." aria-label="Info about IndexedDB"></i>
+                        <i class="info-icon icon" data-icon="info" data-tooltip="Databases used by web apps. Cleared for all sites based on selected time range." aria-label="Info about IndexedDB" aria-hidden="true"></i>
                     </label>
                     <div class="toggle-switch"><input type="checkbox" id="indexedDB"><span class="slider"></span></div>
                 </div>
                 <div class="option-row">
                     <label for="clearHistory"> History <span class="option-range-indicator"></span>
-                        <i class="fas fa-info-circle info-icon" data-tooltip="Your record of visited websites. Cleared based on selected time range." aria-label="Info about Clearing History"></i>
+                        <i class="info-icon icon" data-icon="info" data-tooltip="Your record of visited websites. Cleared based on selected time range." aria-label="Info about Clearing History" aria-hidden="true"></i>
                     </label>
                     <div class="toggle-switch"><input type="checkbox" id="clearHistory"><span class="slider"></span></div>
                 </div>
                 <!-- Other Settings -->
                 <div class="option-row setting-separator">
                     <label for="reloadPage"> Reload Page After Cleaning
-                        <i class="fas fa-info-circle info-icon" data-tooltip="Automatically reload the current page after cleaning is finished successfully." aria-label="Info about Reload Page setting"></i>
+                        <i class="info-icon icon" data-icon="info" data-tooltip="Automatically reload the current page after cleaning is finished successfully." aria-label="Info about Reload Page setting" aria-hidden="true"></i>
                     </label>
                     <div class="toggle-switch"><input type="checkbox" id="reloadPage"><span class="slider"></span></div>
                 </div>
                 <div class="option-row">
                     <label for="confirmBeforeClean"> Confirm Before Cleaning
-                        <i class="fas fa-info-circle info-icon" data-tooltip="Shows an extra confirmation step before clearing the selected data." aria-label="Info about Confirm Before Cleaning setting"></i>
+                        <i class="info-icon icon" data-icon="info" data-tooltip="Shows an extra confirmation step before clearing the selected data." aria-label="Info about Confirm Before Cleaning setting" aria-hidden="true"></i>
                     </label>
                     <div class="toggle-switch"><input type="checkbox" id="confirmBeforeClean"><span class="slider"></span></div>
+                </div>
+                <div class="option-row">
+                    <label for="disableRatingPrompts"> Disable Rating Prompts
+                        <i class="info-icon icon" data-icon="info" data-tooltip="Turn off automatic rating requests after cleaning." aria-label="Info about Rating Prompts setting" aria-hidden="true"></i>
+                    </label>
+                    <div class="toggle-switch"><input type="checkbox" id="disableRatingPrompts"><span class="slider"></span></div>
+                </div>
+                <div class="option-row">
+                    <button id="showRatingBtn" class="secondary-btn" title="Show rating dialog">
+                        <i class="icon" data-icon="star" aria-hidden="true"></i>
+                        Rate Extension
+                    </button>
                 </div>
             </div> <!-- Конец options-padded -->
         </div> <!-- Конец card-content -->
@@ -128,11 +139,11 @@
     <!-- Quick Presets -->
     <div class="quick-presets">
         <button class="preset-btn" data-preset="quick" title="Clear cookies and storage for current site">
-            <i class="fas fa-zap"></i>
+            <i class="icon" data-icon="zap" aria-hidden="true"></i>
             <span>Quick Clean</span>
         </button>
         <button class="preset-btn" data-preset="full" title="Clear all data including cache and history">
-            <i class="fas fa-broom"></i>
+            <i class="icon" data-icon="sparkles" aria-hidden="true"></i>
             <span>Deep Clean</span>
         </button>
     </div>
@@ -140,18 +151,18 @@
     <!-- Кнопка Очистки и Индикаторы Настроек -->
     <button id="cleanBtn" class="clean-btn" aria-live="polite">
         <!-- Содержимое кнопки управляется JS -->
-        <i class="fas fa-play"></i>
+        <i class="status-icon icon" data-icon="sparkles" aria-hidden="true"></i>
         <span id="cleanBtnText" class="btn-text">Start Cleaning</span>
         <div class="clean-btn-indicators">
-            <span id="reloadIndicator" class="setting-indicator hidden" title="Page will reload"><i class="fas fa-sync-alt"></i></span>
-            <span id="confirmIndicator" class="setting-indicator hidden" title="Confirmation needed"><i class="fas fa-check-double"></i></span>
+            <span id="reloadIndicator" class="setting-indicator hidden" title="Page will reload"><i class="icon" data-icon="sync" aria-hidden="true"></i></span>
+            <span id="confirmIndicator" class="setting-indicator hidden" title="Confirmation needed"><i class="icon" data-icon="check" aria-hidden="true"></i></span>
         </div>
     </button>
 
     <!-- Карточки Результатов -->
     <div id="summary" class="summary-card hidden" aria-live="polite">
         <div class="summary-header">
-            <i class="fas fa-check-circle"></i>
+            <i class="icon" data-icon="checkCircle" aria-hidden="true"></i>
             <h3>Cleaning Summary</h3>
             <button id="closeSummaryBtn" class="close-btn" title="Close Summary" aria-label="Close Summary">×</button>
         </div>
@@ -159,7 +170,7 @@
     </div>
     <div id="errorCard" class="summary-card error hidden" role="alert" aria-live="assertive">
         <div class="summary-header error-header">
-            <i class="fas fa-exclamation-triangle"></i>
+            <i class="icon" data-icon="warning" aria-hidden="true"></i>
             <h3>Cleaning Issues</h3>
             <button id="closeErrorBtn" class="close-btn" title="Close Errors" aria-label="Close Errors">×</button>
         </div>

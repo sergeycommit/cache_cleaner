@@ -1,39 +1,169 @@
 // service-worker.js
 const STORAGE_CLEANING_FLAG = 'isCleaning';
+const DEBUG_LOGS = false; // toggle to enable verbose logs
 
 function createCleaningTask(name, action) {
     return { name, action };
 }
 
 // --- Функции очистки (без изменений) ---
-async function clearCookies(tab) { if (!chrome.cookies) throw new Error("Worker: Missing 'cookies' permission."); if (!tab || !tab.url) throw new Error("Worker: Invalid tab info for cookies."); try { let url; try { url = new URL(tab.url); } catch (e) { throw new Error("Worker: Invalid URL."); } if (!url.protocol.startsWith('http')) return `Cookies: Skipped (non-HTTP(S) page).`; const domain = url.hostname; if (!domain) throw new Error("Worker: Invalid domain."); const cookies = await chrome.cookies.getAll({ domain: domain }); if (cookies.length === 0) return `Cookies: No data found for ${domain}.`; let removedCount = 0; const promises = cookies.map(c => { const cookieUrl = `${c.secure ? 'https' : 'http'}://${c.domain.replace(/^\./, '')}${c.path}`; return chrome.cookies.remove({ url: cookieUrl, name: c.name }).then(d => { if(d) removedCount++; }).catch(e => console.warn(`Worker: Failed removing cookie ${c.name}`, e)); }); await Promise.allSettled(promises); return `Cookies: Cleared ${removedCount}/${cookies.length} for ${domain}.`; } catch (error) { console.error("Worker: Error in clearCookies", error); throw new Error(`Cookies: ${error.message}`); } }
-async function clearStorage(tabId, storageType) { if (!chrome.scripting) throw new Error("Worker: Missing 'scripting' permission."); if (!tabId) throw new Error("Worker: Invalid tabId for storage."); const typeName = storageType === 'localStorage' ? 'Local Storage' : 'Session Storage'; try { const results = await chrome.scripting.executeScript({ target: { tabId: tabId }, func: (sType) => { try { const st = window[sType]; const c = st.length; if (c > 0) st.clear(); return { count: c, success: true }; } catch (e) { throw new Error(`Content Script Error (${sType}): ${e.message}`); } }, args: [storageType] }); if (!results || results.length === 0) throw new Error(`Cannot access tab data (${typeName}). Page may be restricted or closed.`); const res = results[0]; if (res.error) throw new Error(`${typeName}: ${res.error.message || 'Script execution error'}`); if (res.result?.success) { return `${typeName}: ${res.result.count > 0 ? `Cleared ${res.result.count} item(s).` : 'No data found.'}`; } else { throw new Error(`${typeName}: Unexpected script result.`); } } catch (error) { console.error(`Worker: Error clearing ${storageType} for tab ${tabId}:`, error); let message = error.message; if (message.includes("No tab with id")) message = `Cannot access tab data (${typeName}). Tab may be closed.`; else if (message.includes("Cannot access contents")) message = `Cannot access tab data (${typeName}). Page may be restricted.`; throw new Error(`${typeName}: ${message}`); } }
-async function clearBrowsingDataCache(sinceTime) { if (!chrome.browsingData) throw new Error("Worker: Missing 'browsingData' permission."); return new Promise((resolve, reject) => { chrome.browsingData.remove({ since: sinceTime }, { "cache": true }, () => { if (chrome.runtime.lastError) { const msg = chrome.runtime.lastError.message; if (msg?.includes("No browsing data")) resolve("Browser Cache: No data found."); else reject(new Error(`Browser Cache: ${msg || 'Failed'}`)); } else resolve("Browser Cache: Cleared successfully."); }); }); }
-async function clearBrowsingDataIndexedDB(sinceTime) { if (!chrome.browsingData) throw new Error("Worker: Missing 'browsingData' permission."); return new Promise((resolve, reject) => { chrome.browsingData.remove({ since: sinceTime }, { "indexedDB": true }, () => { if (chrome.runtime.lastError) { const msg = chrome.runtime.lastError.message; if (msg?.includes("No browsing data")) resolve("IndexedDB: No data found."); else reject(new Error(`IndexedDB: ${msg || 'Failed'}`)); } else resolve("IndexedDB: Cleared successfully."); }); }); }
-async function clearHistory(sinceTime) { if (!chrome.history) throw new Error("Worker: Missing 'history' permission."); return new Promise((resolve, reject) => { chrome.history.deleteRange({ startTime: sinceTime, endTime: Date.now() }, () => { if (chrome.runtime.lastError) reject(new Error(`History: ${chrome.runtime.lastError.message || 'Failed'}`)); else resolve("History: Cleared successfully for range."); }); }); }
+async function clearCookies(tab) { 
+    if (!chrome.cookies) throw new Error("Worker: Missing 'cookies' permission."); 
+    if (!tab || !tab.url) throw new Error("Worker: Invalid tab info for cookies."); 
+    try { 
+        let url; 
+        try { 
+            url = new URL(tab.url); 
+        } catch (e) { 
+            throw new Error("Worker: Invalid URL."); 
+        } 
+        if (!url.protocol.startsWith('http')) return `Cookies: Skipped (non-HTTP(S) page).`; 
+        const domain = url.hostname; 
+        if (!domain) throw new Error("Worker: Invalid domain."); 
+        const cookies = await chrome.cookies.getAll({ domain: domain }); 
+        if (cookies.length === 0) return `Cookies: No data found for ${domain}.`; 
+        let removedCount = 0; 
+        const promises = cookies.map(c => { 
+            const cookieUrl = `${c.secure ? 'https' : 'http'}://${c.domain.replace(/^\./, '')}${c.path}`; 
+            return chrome.cookies.remove({ url: cookieUrl, name: c.name }).then(d => { 
+                if(d) removedCount++; 
+            }).catch(e => console.warn(`Worker: Failed removing cookie ${c.name}`, e)); 
+        }); 
+        await Promise.allSettled(promises); 
+        return `Cookies: Cleared ${removedCount}/${cookies.length} for ${domain}.`; 
+    } catch (error) { 
+        console.error("Worker: Error in clearCookies", error); 
+        throw new Error(`Cookies: ${error.message}`); 
+    } 
+}
 
-// --- Notification Helper ---
-function showNotification(title, message, errorCount = 0) {
-    // Use a known existing icon to avoid missing asset issues
-    const iconUrl = 'images/icon128.png';
-    const notificationId = 'cache-cleaner-notification';
+async function clearStorage(tabId, storageType) { 
+    if (!chrome.scripting) throw new Error("Worker: Missing 'scripting' permission."); 
+    if (!tabId) throw new Error("Worker: Invalid tabId for storage."); 
+    const typeName = storageType === 'localStorage' ? 'Local Storage' : 'Session Storage';
+    
+    if (DEBUG_LOGS) console.log(`Worker: Attempting to clear ${typeName} for tab ${tabId}`);
+    
+    // Check if we can access the tab first
     try {
-        chrome.notifications.create(notificationId, {
-            type: 'basic',
-            iconUrl: iconUrl,
-            title: title,
-            message: message,
-            priority: errorCount > 0 ? 2 : 1
-        });
+        const tab = await chrome.tabs.get(tabId);
+        if (DEBUG_LOGS) console.log(`Worker: Tab URL: ${tab.url}`);
+        
+        if (!tab.url || tab.url.startsWith('chrome://') || tab.url.startsWith('chrome-extension://') || tab.url.startsWith('file://')) {
+            if (DEBUG_LOGS) console.log(`Worker: Cannot access ${typeName} on restricted page type`);
+            return `${typeName}: Cannot access storage on this type of page.`;
+        }
     } catch (e) {
-        console.error("Worker: Could not create notification:", e);
-    }
+        if (DEBUG_LOGS) console.log(`Worker: Error accessing tab: ${e.message}`);
+        return `${typeName}: Cannot access tab information.`;
+    } 
+    try { 
+                if (DEBUG_LOGS) console.log(`Worker: Executing script for ${typeName}`);
+        
+        const results = await chrome.scripting.executeScript({ 
+            target: { tabId: tabId }, 
+            func: (sType) => { 
+                try { 
+                    console.log(`Content Script: Attempting to clear ${sType}`);
+                    const st = window[sType]; 
+                    
+                    if (!st) {
+                        console.log(`Content Script: ${sType} not available on this page`);
+                        return { count: 0, success: true, message: `${sType} not available on this page` };
+                    }
+                    
+                    // Get the count before clearing
+                    let count = 0;
+                    try {
+                        count = st.length;
+                        console.log(`Content Script: ${sType} length: ${count}`);
+                    } catch (e) {
+                        // Some storage objects might not have a length property
+                        count = Object.keys(st).length;
+                        console.log(`Content Script: ${sType} keys count: ${count}`);
+                    }
+                    
+                    if (count > 0) {
+                        st.clear();
+                        console.log(`Content Script: Cleared ${sType}`);
+                    }
+                    
+                    return { count: count, success: true }; 
+                } catch (e) { 
+                    console.error(`Content Script: Error clearing ${sType}:`, e);
+                    return { error: e.message, success: false }; 
+                } 
+            }, 
+            args: [storageType] 
+        });
+        
+        if (DEBUG_LOGS) console.log(`Worker: Script execution results:`, results);
+        
+        if (!results || results.length === 0) throw new Error(`Cannot access tab data (${typeName}). Page may be restricted or closed.`); 
+        const res = results[0]; 
+        
+        if (DEBUG_LOGS) console.log(`Worker: First result:`, res);
+        
+        if (res.error) throw new Error(`${typeName}: ${res.error.message || 'Script execution error'}`); 
+        if (res.result?.success) { 
+            if (DEBUG_LOGS) console.log(`Worker: Success result:`, res.result);
+            if (res.result.message) {
+                return `${typeName}: ${res.result.message}`;
+            }
+            return `${typeName}: ${res.result.count > 0 ? `Cleared ${res.result.count} item(s).` : 'No data found.'}`; 
+        } else { 
+            if (DEBUG_LOGS) console.log(`Worker: Unexpected result:`, res.result);
+            throw new Error(`${typeName}: Unexpected script result.`); 
+        } 
+    } catch (error) { 
+        console.error(`Worker: Error clearing ${storageType} for tab ${tabId}:`, error); 
+        let message = error.message; 
+        if (message.includes("No tab with id")) message = `Cannot access tab data (${typeName}). Tab may be closed.`; 
+        else if (message.includes("Cannot access contents")) message = `Cannot access tab data (${typeName}). Page may be restricted.`; 
+        throw new Error(`${typeName}: ${message}`); 
+    } 
+}
+
+async function clearBrowsingDataCache(sinceTime) { 
+    if (!chrome.browsingData) throw new Error("Worker: Missing 'browsingData' permission."); 
+    return new Promise((resolve, reject) => { 
+        chrome.browsingData.remove({ since: sinceTime }, { "cache": true }, () => { 
+            if (chrome.runtime.lastError) { 
+                const msg = chrome.runtime.lastError.message; 
+                if (msg?.includes("No browsing data")) resolve("Browser Cache: No data found."); 
+                else reject(new Error(`Browser Cache: ${msg || 'Failed'}`)); 
+            } else resolve("Browser Cache: Cleared successfully."); 
+        }); 
+    }); 
+}
+
+async function clearBrowsingDataIndexedDB(sinceTime) { 
+    if (!chrome.browsingData) throw new Error("Worker: Missing 'browsingData' permission."); 
+    return new Promise((resolve, reject) => { 
+        chrome.browsingData.remove({ since: sinceTime }, { "indexedDB": true }, () => { 
+            if (chrome.runtime.lastError) { 
+                const msg = chrome.runtime.lastError.message; 
+                if (msg?.includes("No browsing data")) resolve("IndexedDB: No data found."); 
+                else reject(new Error(`IndexedDB: ${msg || 'Failed'}`)); 
+            } else resolve("IndexedDB: Cleared successfully."); 
+        }); 
+    }); 
+}
+
+async function clearHistory(sinceTime) { 
+    if (!chrome.history) throw new Error("Worker: Missing 'history' permission."); 
+    return new Promise((resolve, reject) => { 
+        chrome.history.deleteRange({ startTime: sinceTime, endTime: Date.now() }, () => { 
+            if (chrome.runtime.lastError) reject(new Error(`History: ${chrome.runtime.lastError.message || 'Failed'}`)); 
+            else resolve("History: Cleared successfully for range."); 
+        }); 
+    }); 
 }
 
 // --- Main Message Listener ---
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message.action === "cleanData") {
-        console.log("Worker: Received cleanData message");
+        if (DEBUG_LOGS) console.log("Worker: Received cleanData message");
         const options = message.options;
         const tabInfo = message.tabInfo;
         const sinceTime = message.sinceTime;
@@ -42,12 +172,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         chrome.storage.local.set({ [STORAGE_CLEANING_FLAG]: true }, async () => {
             if (chrome.runtime.lastError) {
                 console.error("Worker: Failed to set cleaning flag", chrome.runtime.lastError);
-                // Should we still proceed? Maybe not.
-                // Send error message back?
-                chrome.runtime.sendMessage({ action: "cleaningComplete", success: false, summary: [], errors: ["Failed to initiate cleaning: Cannot set state flag."] }).catch(e => {});
+                // Send error message back
+                chrome.runtime.sendMessage({ 
+                    action: "cleaningComplete", 
+                    success: false, 
+                    summary: [], 
+                    errors: ["Failed to initiate cleaning: Cannot set state flag."] 
+                }).catch(e => {});
                 return;
             }
-            console.log("Worker: isCleaning flag set to true.");
+            if (DEBUG_LOGS) console.log("Worker: isCleaning flag set to true.");
 
             let successDetails = [];
             let failureDetails = [];
@@ -65,17 +199,21 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                 if (options.clearHistory) tasks.push(createCleaningTask('History', () => clearHistory(sinceTime)));
 
                 if (tasks.length === 0) {
-                    showNotification("Cache Cleaner", "No cleaning options selected.");
                     // Send completion message even if no tasks
-                    chrome.runtime.sendMessage({ action: "cleaningComplete", success: true, summary: ["No cleaning options selected."], errors: [] }).catch(e => {});
+                    chrome.runtime.sendMessage({ 
+                        action: "cleaningComplete", 
+                        success: true, 
+                        summary: ["No cleaning options selected."], 
+                        errors: [] 
+                    }).catch(e => {});
                     // Clear flag
-                    chrome.storage.local.remove(STORAGE_CLEANING_FLAG); // Use remove
+                    chrome.storage.local.remove(STORAGE_CLEANING_FLAG);
                     return; // Exit early
                 }
 
-                console.log(`Worker: Executing ${tasks.length} tasks...`);
+                if (DEBUG_LOGS) console.log(`Worker: Executing ${tasks.length} tasks...`);
                 const results = await Promise.allSettled(tasks.map(task => task.action()));
-                console.log("Worker: Cleaning results:", results);
+                if (DEBUG_LOGS) console.log("Worker: Cleaning results:", results);
 
                 // --- Process Results ---
                 results.forEach((result, index) => {
@@ -100,19 +238,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                     }
                 });
 
-                // --- Prepare Notification ---
-                let notificationTitle = "Cache Cleaner";
-                let notificationMessage = "";
-                if (errorCount > 0) {
-                    notificationTitle = `Cache Cleaner: ${errorCount} Error(s)`;
-                    notificationMessage = `Finished with ${errorCount} error(s) out of ${tasks.length} task(s). ${failureDetails.length > 0 ? failureDetails[0] : ''}`;
-                } else if (successCount > 0) {
-                    notificationMessage = `Successfully cleared data for ${successCount}/${tasks.length} task(s).`;
-                } else {
-                    notificationMessage = `Finished ${tasks.length} task(s). No data found to clear.`;
-                }
-                showNotification(notificationTitle, notificationMessage, errorCount);
-
                 // --- Reload Page ---
                 if (options.reloadPage && errorCount === 0 && successCount > 0 && tabInfo?.id) {
                     setTimeout(async () => {
@@ -130,17 +255,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                 console.error("Worker: Unexpected error during cleaning process:", error);
                 errorCount++;
                 failureDetails.push(`Worker: Unexpected error - ${error.message}`);
-                showNotification("Cache Cleaner: Error", "An unexpected error occurred during cleaning.", 1);
             } finally {
                 // --- ALWAYS DO THIS ---
-                console.log("Worker: Cleaning process finished. Clearing flag and sending completion message.");
+                if (DEBUG_LOGS) console.log("Worker: Cleaning process finished. Clearing flag and sending completion message.");
 
                 // 1. Clear the flag in storage
-                chrome.storage.local.remove(STORAGE_CLEANING_FLAG, () => { // Use remove
+                chrome.storage.local.remove(STORAGE_CLEANING_FLAG, () => {
                     if (chrome.runtime.lastError) {
                         console.error("Worker: Failed to clear cleaning flag", chrome.runtime.lastError);
                     } else {
-                        console.log("Worker: isCleaning flag removed.");
+                        if (DEBUG_LOGS) console.log("Worker: isCleaning flag removed.");
                     }
                 });
 
@@ -170,16 +294,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return false;
 });
 
-console.log("Cache Cleaner Service Worker Started.");
+if (DEBUG_LOGS) console.log("Cache Cleaner Service Worker Started.");
+
 chrome.runtime.onInstalled.addListener((details) => {
     if (details.reason === chrome.runtime.OnInstalledReason.INSTALL) {
-        // Code to be executed on first install
-        // eg. open a tab with a url
-        chrome.tabs.create({
-            url: "https://sergeycommit.github.io/cache_cleaner/",
-        });
+        // Create context menu items
+        setupContextMenus();
+        // Optional: open local privacy page instead of remote
+        chrome.tabs.create({ url: chrome.runtime.getURL('wp.html') });
     } else if (details.reason === chrome.runtime.OnInstalledReason.UPDATE) {
-        // When extension is updated
+        setupContextMenus();
     } else if (
         details.reason === chrome.runtime.OnInstalledReason.CHROME_UPDATE
     ) {
@@ -188,5 +312,77 @@ chrome.runtime.onInstalled.addListener((details) => {
         details.reason === chrome.runtime.OnInstalledReason.SHARED_MODULE_UPDATE
     ) {
         // When a shared module is updated
+    }
+});
+
+// Context Menus
+function setupContextMenus() {
+    try {
+        chrome.contextMenus.removeAll(() => {
+            chrome.contextMenus.create({
+                id: 'quick-clean',
+                title: 'Quick Clean this site',
+                contexts: ['page', 'action']
+            });
+            chrome.contextMenus.create({
+                id: 'deep-clean',
+                title: 'Deep Clean (cache + storage)',
+                contexts: ['page', 'action']
+            });
+        });
+    } catch (e) {
+        console.warn('Context menus setup failed:', e?.message || e);
+    }
+}
+
+chrome.contextMenus.onClicked.addListener(async (info, tab) => {
+    if (!tab?.id) return;
+    const isDeep = info.menuItemId === 'deep-clean';
+    const sinceTime = Date.now() - 3600000; // default last hour
+    const options = {
+        cookies: true,
+        localStorage: true,
+        sessionStorage: true,
+        cache: isDeep,
+        indexedDB: isDeep,
+        clearHistory: false,
+        reloadPage: false
+    };
+    try {
+        await chrome.runtime.sendMessage({
+            action: 'cleanData',
+            options,
+            tabInfo: { id: tab.id, url: tab.url },
+            sinceTime
+        });
+    } catch (e) {
+        console.error('Failed to trigger cleaning from context menu:', e);
+    }
+});
+
+// Commands (keyboard shortcuts)
+chrome.commands?.onCommand.addListener(async (command) => {
+    try {
+        const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+        if (!tab?.id) return;
+        const isDeep = command === 'deep-clean';
+        const sinceTime = Date.now() - 3600000;
+        const options = {
+            cookies: true,
+            localStorage: true,
+            sessionStorage: true,
+            cache: isDeep,
+            indexedDB: isDeep,
+            clearHistory: false,
+            reloadPage: false
+        };
+        await chrome.runtime.sendMessage({ 
+            action: 'cleanData', 
+            options, 
+            tabInfo: { id: tab.id, url: tab.url }, 
+            sinceTime 
+        });
+    } catch (e) {
+        console.error('Command handling failed:', e);
     }
 });

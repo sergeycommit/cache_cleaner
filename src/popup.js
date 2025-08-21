@@ -1,8 +1,8 @@
 /// popup.js - Rewritten (v3)
 
 // --- Constants ---
-const STORAGE_KEYS = { PREFERENCES: 'preferences', USAGE_STATS: 'usageStats', THEME: 'theme', CLEANING_FLAG: 'isCleaning', RATING_SHOWN: 'ratingShown', LAST_RATING_PROMPT: 'lastRatingPrompt', RELOAD_DEFAULT_APPLIED: 'reloadDefaultApplied'};
-const DEFAULT_PREFERENCES = { cookies: true, localStorage: true, sessionStorage: true, cache: false, indexedDB: false, clearHistory: false, reloadPage: false, confirmBeforeClean: false, timeRange: '3600000' };
+const STORAGE_KEYS = { PREFERENCES: 'preferences', USAGE_STATS: 'usageStats', THEME: 'theme', CLEANING_FLAG: 'isCleaning', RATING_SHOWN: 'ratingShown', LAST_RATING_PROMPT: 'lastRatingPrompt', RELOAD_DEFAULT_APPLIED: 'reloadDefaultApplied', INSTALLATION_TIME: 'installationTime'};
+const DEFAULT_PREFERENCES = { cookies: true, localStorage: true, sessionStorage: true, cache: false, indexedDB: false, clearHistory: false, reloadPage: false, confirmBeforeClean: false, disableRatingPrompts: false, timeRange: '3600000' };
 const DEFAULT_USAGE_STATS = { cleanCount: 0 };
 const SELECTORS = {
     themeToggle: '#themeToggle',
@@ -27,6 +27,8 @@ const SELECTORS = {
     clearHistoryCheck: '#clearHistory',
     reloadPageCheck: '#reloadPage',
     confirmBeforeCleanCheck: '#confirmBeforeClean',
+    disableRatingPromptsCheck: '#disableRatingPrompts',
+    showRatingBtn: '#showRatingBtn',
     optionRangeIndicators: '.option-range-indicator',
     cleanBtn: '#cleanBtn',
     cleanBtnText: '#cleanBtnText',
@@ -56,6 +58,52 @@ let cleanBtnTimeout = null;
 let currentTooltipTarget = null;
 let ignoreNextStorageChange = false; // Flag to ignore next storage change event
 
+// --- Minimal Inline SVG Icons ---
+function getIconSvg(name) {
+    // All icons are 24x24, stroke-based, inherit currentColor
+    switch (name) {
+        case 'sun':
+            return '<svg class="status-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>';
+        case 'moon':
+            return '<svg class="status-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>';
+        case 'info':
+            return '<svg class="status-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>';
+        case 'warning':
+            return '<svg class="status-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>';
+        case 'globe':
+            return '<svg class="status-icon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 0 20a15.3 15.3 0 0 1 0-20z"/></svg>';
+        case 'sliders':
+            return '<svg class="status-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg>';
+        case 'chevronDown':
+            return '<svg class="status-icon" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>';
+        case 'zap':
+            return '<svg class="status-icon" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>';
+        case 'sparkles':
+            return '<svg class="status-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l2 5l5 2l-5 2l-2 5l-2-5l-5-2l5-2l2-5z"/></svg>';
+        case 'sync':
+            return '<svg class="status-icon" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 0 0-15-6.7M3 12a9 9 0 0 0 15 6.7"/><polyline points="3 8 3 3 8 3"/><polyline points="21 16 21 21 16 21"/></svg>';
+        case 'check':
+            return '<svg class="status-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>';
+        case 'x':
+            return '<svg class="status-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
+        case 'checkCircle':
+            return '<svg class="status-icon" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>';
+        case 'share':
+            return '<svg class="status-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>';
+        case 'star':
+            return '<svg class="status-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>';
+        default:
+            return '<svg class="status-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/></svg>';
+    }
+}
+
+function renderStaticIcons() {
+    document.querySelectorAll('i.icon[data-icon]').forEach((el) => {
+        const name = el.getAttribute('data-icon');
+        el.innerHTML = getIconSvg(name);
+    });
+}
+
 // --- Helper Functions ---
 function getElement(selector) { return document.querySelector(selector); }
 function getAllElements(selector) { return document.querySelectorAll(selector); }
@@ -75,6 +123,7 @@ function escapeHtml(unsafe) {
 document.addEventListener('DOMContentLoaded', async () => {
     try {
         cacheDOMElements();
+        renderStaticIcons();
         const loadedTheme = await loadAppState();
         setupInitialUI(loadedTheme);
         await applyReloadDefaultMigration();
@@ -84,6 +133,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         addStorageListener();
         updateCleanButtonState();
         setupRatingStars();
+        
+        // Check if we should show the rating request (after 7 days)
+        checkAndShowRateRequest();
     } catch (error) {
         console.error("Popup Initialization Failed:", error);
         displayFatalError(`Initialization failed: ${error.message}`);
@@ -118,7 +170,7 @@ function cacheDOMElements() {
 
 async function loadAppState() {
     return new Promise((resolve, reject) => {
-        chrome.storage.local.get([STORAGE_KEYS.THEME, STORAGE_KEYS.PREFERENCES, STORAGE_KEYS.USAGE_STATS, STORAGE_KEYS.CLEANING_FLAG], (data) => {
+        chrome.storage.local.get([STORAGE_KEYS.THEME, STORAGE_KEYS.PREFERENCES, STORAGE_KEYS.USAGE_STATS, STORAGE_KEYS.CLEANING_FLAG, STORAGE_KEYS.INSTALLATION_TIME], (data) => {
             try {
                 if (chrome.runtime.lastError) {
                     throw new Error(`Error loading app state: ${chrome.runtime.lastError.message}`);
@@ -126,6 +178,12 @@ async function loadAppState() {
                 currentPreferences = { ...DEFAULT_PREFERENCES, ...(data?.[STORAGE_KEYS.PREFERENCES] || {}) };
                 usageStats = { ...DEFAULT_USAGE_STATS, ...(data?.[STORAGE_KEYS.USAGE_STATS] || {}) };
                 isCleaningInProgress = data?.[STORAGE_KEYS.CLEANING_FLAG] === true;
+                
+                // Set installation time if not set
+                if (!data?.[STORAGE_KEYS.INSTALLATION_TIME]) {
+                    chrome.storage.local.set({ [STORAGE_KEYS.INSTALLATION_TIME]: Date.now() });
+                }
+                
                 resolve(data?.[STORAGE_KEYS.THEME]);
             } catch (error) {
                 console.error("Error processing loaded app state:", error);
@@ -183,6 +241,7 @@ function setupInitialUI(savedTheme) {
         $.clearHistoryCheck && ($.clearHistoryCheck.checked = currentPreferences.clearHistory);
         $.reloadPageCheck && ($.reloadPageCheck.checked = currentPreferences.reloadPage);
         $.confirmBeforeCleanCheck && ($.confirmBeforeCleanCheck.checked = currentPreferences.confirmBeforeClean);
+        $.disableRatingPromptsCheck && ($.disableRatingPromptsCheck.checked = currentPreferences.disableRatingPrompts);
         $.timeRangeSelect && ($.timeRangeSelect.value = currentPreferences.timeRange);
     } catch (error) {
         console.error("Error applying preferences to UI:", error);
@@ -195,7 +254,7 @@ function setupInitialUI(savedTheme) {
 function updateThemeToggleIcon() {
     const isDark = document.body.classList.contains('dark-mode');
     if ($.themeToggle) {
-        $.themeToggle.innerHTML = isDark ? '<i class="fas fa-sun"></i>' : '<i class="fas fa-moon"></i>';
+        $.themeToggle.innerHTML = isDark ? getIconSvg('sun') : getIconSvg('moon');
         $.themeToggle.title = isDark ? 'Switch to Light Theme' : 'Switch to Dark Theme';
     }
 }
@@ -234,6 +293,9 @@ async function checkActiveTabAndUpdateUI() {
                     ? "Cleaning options for this tab are disabled on local files."
                     : "Cleaning options for this tab are disabled on this page type.";
             setTabSpecificOptionsEnabled(false, message);
+            $.dataFetchError?.classList.add('hidden');
+        } else if (isRestrictedUrl(tab.url)) {
+            setTabSpecificOptionsEnabled(false, "Cleaning options for this site are disabled.");
             $.dataFetchError?.classList.add('hidden');
         } else {
             setTabSpecificOptionsEnabled(true);
@@ -278,6 +340,15 @@ function setTabSpecificOptionsEnabled(enabled, message = "") {
 async function fetchAndDisplayDataCounts(tab) {
     if (!tab || !tab.id) return;
 
+    if (isRestrictedUrl(tab.url)) {
+        // Show N/A for restricted pages without attempting scripting
+        updateDataCountUI('cookiesCount', '(N/A)');
+        updateDataCountUI('localStorageCount', '(N/A)');
+        updateDataCountUI('sessionStorageCount', '(N/A)');
+        $.dataFetchError?.classList.add('hidden');
+        return;
+    }
+
     let fetchErrorOccurred = false;
     let isErrorPage = false;
     const counts = { cookies: '...', localStorage: '...', sessionStorage: '...' };
@@ -320,6 +391,26 @@ async function fetchAndDisplayDataCounts(tab) {
     $.dataFetchError?.classList.toggle('hidden', !fetchErrorOccurred || isErrorPage);
 }
 
+function isRestrictedUrl(url) {
+    try {
+        const u = new URL(url);
+        const host = u.hostname || '';
+        // Known restricted galleries and stores
+        const restrictedHosts = [
+            'chromewebstore.google.com',
+            'chrome.google.com', // legacy Web Store paths
+            'microsoftedge.microsoft.com',
+            'addons.opera.com'
+        ];
+        if (restrictedHosts.some(h => host === h || host.endsWith('.' + h))) return true;
+        // Disallow chrome-error pages as well
+        if (url.includes('chrome-error:')) return true;
+        return false;
+    } catch {
+        return false;
+    }
+}
+
 function updateDataCountUI(elementId, count) {
     const element = $[elementId];
     if (!element) return;
@@ -339,8 +430,9 @@ function updateDataCountUI(elementId, count) {
             element.classList.add('unavailable');
         } else {
             // Other errors - show warning icon
-            const errorIcon = document.createElement('i');
-            errorIcon.className = 'fas fa-exclamation-triangle error-icon';
+            const errorIcon = document.createElement('span');
+            errorIcon.className = 'error-icon';
+            errorIcon.innerHTML = getIconSvg('warning');
             errorIcon.title = 'Could not retrieve count';
             element.appendChild(errorIcon);
             element.classList.add('error-icon');
@@ -361,7 +453,7 @@ function addEventListeners() {
     const preferenceElements = [
         $.cookiesCheck, $.localStorageCheck, $.sessionStorageCheck,
         $.cacheCheck, $.indexedDBCheck, $.clearHistoryCheck,
-        $.reloadPageCheck, $.confirmBeforeCleanCheck, $.timeRangeSelect
+        $.reloadPageCheck, $.confirmBeforeCleanCheck, $.disableRatingPromptsCheck, $.timeRangeSelect
     ];
     preferenceElements.forEach(el => el?.addEventListener('change', handlePreferenceChange));
 
@@ -379,6 +471,7 @@ function addEventListeners() {
     $.cleanBtn?.addEventListener('mouseout', handleCleanButtonMouseout);
     $.closeSummaryBtn?.addEventListener('click', () => $.summaryElement?.classList.add('hidden'));
     $.closeErrorBtn?.addEventListener('click', () => $.errorElement?.classList.add('hidden'));
+    $.showRatingBtn?.addEventListener('click', showRatingModal);
     document.body.addEventListener('scroll', handleBodyScroll, { capture: true, passive: true });
     
     // Quick presets
@@ -402,14 +495,14 @@ function handlePreferenceChange() {
     const checkElements = [
         $.cookiesCheck, $.localStorageCheck, $.sessionStorageCheck,
         $.cacheCheck, $.indexedDBCheck, $.clearHistoryCheck,
-        $.reloadPageCheck, $.confirmBeforeCleanCheck
+        $.reloadPageCheck, $.confirmBeforeCleanCheck, $.disableRatingPromptsCheck
     ];
     let changed = false;
     checkElements.forEach(el => {
         if (el) {
             const key = el.id;
             const newValue = el.checked;
-            if (!el.disabled || ['reloadPage', 'confirmBeforeClean'].includes(key)) {
+            if (!el.disabled || ['reloadPage', 'confirmBeforeClean', 'disableRatingPrompts'].includes(key)) {
                 if (currentPreferences[key] !== newValue) {
                     currentPreferences[key] = newValue;
                     changed = true;
@@ -560,8 +653,10 @@ function handlePresetClick(e) {
     handlePreferenceChange();
 
     // Button micro-feedback
-    e.currentTarget.style.transform = 'scale(0.95)';
-    setTimeout(() => { e.currentTarget.style.transform = ''; }, 150);
+    if (e.currentTarget && e.currentTarget.style) {
+        e.currentTarget.style.transform = 'scale(0.95)';
+        setTimeout(() => { if (e.currentTarget && e.currentTarget.style) { e.currentTarget.style.transform = ''; } }, 150);
+    }
 }
 
 function animateToggleHighlight(toggleEl, newState) {
@@ -627,7 +722,7 @@ function handleCleaningComplete(message) {
 
         // Clear button content
         $.cleanBtn.innerHTML = `
-            <i class="fas fa-times status-icon"></i>
+            ${getIconSvg('x')}
             <span class="status-text">Error</span>
         `;
 
@@ -644,13 +739,11 @@ function handleCleaningComplete(message) {
 
         // Clear button content
         $.cleanBtn.innerHTML = `
-            <i class="fas fa-check status-icon"></i>
+            ${getIconSvg('check')}
             <span class="status-text">Success</span>
         `;
         usageStats.cleanCount++;
         saveUsageStats();
-        // Проверяем необходимость показа рейтинга
-        checkAndShowRateRequest();
 
         // Set timer to return to normal state
         cleanBtnTimeout = setTimeout(() => {
@@ -674,11 +767,11 @@ function setButtonVisualState(state, text = '') {
 
     // Fully restore original button structure
     btn.innerHTML = `
-        <i class="fas fa-broom"></i>
+        ${getIconSvg('sparkles')}
         <span id="cleanBtnText" class="btn-text">${text}</span>
         <div class="clean-btn-indicators">
-            <span id="reloadIndicator" class="setting-indicator ${!currentPreferences.reloadPage ? 'hidden' : ''}" title="Page will reload"><i class="fas fa-sync-alt"></i></span>
-            <span id="confirmIndicator" class="setting-indicator ${!currentPreferences.confirmBeforeClean ? 'hidden' : ''}" title="Confirmation needed"><i class="fas fa-check-double"></i></span>
+            <span id="reloadIndicator" class="setting-indicator ${!currentPreferences.reloadPage ? 'hidden' : ''}" title="Page will reload">${getIconSvg('sync')}</span>
+            <span id="confirmIndicator" class="setting-indicator ${!currentPreferences.confirmBeforeClean ? 'hidden' : ''}" title="Confirmation needed">${getIconSvg('check')}</span>
         </div>
     `;
 
@@ -694,9 +787,9 @@ function setButtonVisualState(state, text = '') {
             break;
         case 'success': case 'error':
             btn.classList.add(state);
-            const iconClass = state === 'success' ? 'fa-check' : 'fa-times';
+            const iconName = state === 'success' ? 'check' : 'x';
             btn.innerHTML = `
-                <i class="fas ${iconClass} status-icon"></i>
+                ${getIconSvg(iconName)}
                 <span class="status-text">${text}</span>
             `;
             break;
@@ -782,6 +875,12 @@ async function handleCleanButtonClick() {
             document.removeEventListener('click', handleOutsideConfirmClick, { capture: true });
         }
 
+        // Ensure optional permissions (history) as needed
+        await ensureOptionalPermissions({
+            needsHistory: $.clearHistoryCheck?.checked === true,
+            needsNotifications: false
+        });
+
         // Set cleaning states
         isAwaitingConfirmation = false;
         isCleaningInProgress = true;
@@ -814,10 +913,7 @@ async function handleCleanButtonClick() {
             sinceTime: sinceTime
         });
 
-        // Update usage stats
-        usageStats.cleanCount++;
-        saveUsageStats();
-        checkAndShowRateRequest();
+        // Usage stats are incremented on successful completion only
 
     } catch (error) {
         console.error("Popup: Error during cleaning:", error);
@@ -849,6 +945,26 @@ async function handleCleanButtonClick() {
     }
 }
 
+async function ensureOptionalPermissions({ needsHistory, needsNotifications }) {
+    try {
+        const toRequest = [];
+        if (needsHistory) toRequest.push('history');
+        // Note: notifications permission removed from manifest, so we don't request it
+        if (toRequest.length === 0) return;
+
+        // Filter already granted
+        const granted = await chrome.permissions.getAll();
+        const stillNeeded = toRequest.filter(p => !(granted?.permissions || []).includes(p));
+        if (stillNeeded.length === 0) return;
+
+        // Attempt request (must be user gesture; we're in a click handler)
+        await chrome.permissions.request({ permissions: stillNeeded });
+    } catch (e) {
+        // Silently continue; features will degrade gracefully
+        console.warn('Optional permissions request failed or denied:', e?.message || e);
+    }
+}
+
 function handleOutsideConfirmClick(event) {
     if (isAwaitingConfirmation && $.cleanBtn && !$.cleanBtn.contains(event.target)) {
         event.preventDefault(); event.stopPropagation();
@@ -867,20 +983,20 @@ function toggleCollapsibleSection(headerElement) {
     const isCollapsed = card.classList.contains('collapsed');
 
     if (isCollapsed) {
-        content.style.maxHeight = content.scrollHeight + "px";
+        if (content && content.style) content.style.maxHeight = content.scrollHeight + "px";
         card.classList.remove('collapsed');
         headerElement.setAttribute('aria-expanded', 'true');
         content.addEventListener('transitionend', function onExpandEnd() {
             content.removeEventListener('transitionend', onExpandEnd);
-            if (!card.classList.contains('collapsed')) content.style.maxHeight = 'none';
+            if (!card.classList.contains('collapsed') && content && content.style) content.style.maxHeight = 'none';
 
             // After expanding, reinitialize icons inside
             refreshTooltipHandlers();
         }, { once: true });
     } else {
-        content.style.maxHeight = content.scrollHeight + "px";
+        if (content && content.style) content.style.maxHeight = content.scrollHeight + "px";
         requestAnimationFrame(() => {
-            content.style.maxHeight = '0';
+            if (content && content.style) content.style.maxHeight = '0';
             card.classList.add('collapsed');
             headerElement.setAttribute('aria-expanded', 'false');
         });
@@ -937,13 +1053,17 @@ function showTooltip(element, text) {
     $.infoTooltip.setAttribute('aria-hidden', 'false');
 
     // Temporarily make the tooltip visible but transparent for measurement
-    $.infoTooltip.style.opacity = '0';
+    if ($.infoTooltip.style) {
+        $.infoTooltip.style.opacity = '0';
+    }
     $.infoTooltip.classList.add('show');
 
     positionTooltip(element);
 
     // Make tooltip visible
-    $.infoTooltip.style.opacity = '';
+    if ($.infoTooltip.style) {
+        $.infoTooltip.style.opacity = '';
+    }
 }
 
 function positionTooltip(element) {
@@ -976,9 +1096,11 @@ function positionTooltip(element) {
     top = Math.max(top, PADDING);
 
     // Position tooltip absolutely relative to viewport, not the document
-    $.infoTooltip.style.position = 'fixed';
-    $.infoTooltip.style.top = `${top}px`;
-    $.infoTooltip.style.left = `${left}px`;
+    if ($.infoTooltip.style) {
+        $.infoTooltip.style.position = 'fixed';
+        $.infoTooltip.style.top = `${top}px`;
+        $.infoTooltip.style.left = `${left}px`;
+    }
 }
 
 function repositionTooltip() {
@@ -1091,25 +1213,87 @@ function saveUsageStats() {
     });
 }
 
+// Show rating modal manually (for Rate Extension button)
+function showRatingModal() {
+    const modal = document.getElementById('rateModal');
+    if (modal && modal.classList.contains('hidden')) {
+        modal.classList.remove('hidden');
+        const closeBtn = document.getElementById('rateCloseBtn');
+        const previouslyFocused = document.activeElement;
+        // focus trap
+        const focusable = modal.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
+        const firstEl = focusable[0];
+        const lastEl = focusable[focusable.length - 1];
+        if (firstEl) firstEl.focus();
+        function onKeydown(ev) {
+            if (ev.key === 'Escape') { hide(); }
+            if (ev.key === 'Tab' && focusable.length > 0) {
+                if (ev.shiftKey && document.activeElement === firstEl) { ev.preventDefault(); lastEl.focus(); }
+                else if (!ev.shiftKey && document.activeElement === lastEl) { ev.preventDefault(); firstEl.focus(); }
+            }
+        }
+        function hide() {
+            modal.classList.add('hidden');
+            document.removeEventListener('keydown', onKeydown, true);
+            if (previouslyFocused && previouslyFocused.focus) previouslyFocused.focus();
+        }
+        if (closeBtn) closeBtn.onclick = hide;
+        // Close on overlay click
+        modal.addEventListener('click', (e) => { if (e.target === modal) hide(); }, { once: true });
+        document.addEventListener('keydown', onKeydown, true);
+    }
+}
+
 // Check if we should show the rating request
 function checkAndShowRateRequest() {
-    // Show rating modal after pressing Clean if user hasn't rated yet
-    chrome.storage.local.get([STORAGE_KEYS.RATING_SHOWN], (data) => {
+    // Check if user has disabled rating prompts
+    chrome.storage.local.get([STORAGE_KEYS.RATING_SHOWN, 'disableRatingPrompts', STORAGE_KEYS.INSTALLATION_TIME], (data) => {
         const hasShownRating = data?.[STORAGE_KEYS.RATING_SHOWN] === true;
-        if (!hasShownRating) {
-            const modal = document.getElementById('rateModal');
-            if (modal && modal.classList.contains('hidden')) {
-                modal.classList.remove('hidden');
-                // Wire close button
-                const closeBtn = document.getElementById('rateCloseBtn');
-                if (closeBtn) {
-                    closeBtn.onclick = () => modal.classList.add('hidden');
-                }
-                // Close on overlay click
-                modal.addEventListener('click', (e) => {
-                    if (e.target === modal) modal.classList.add('hidden');
-                }, { once: true });
+        const ratingDisabled = data?.disableRatingPrompts === true;
+        const installationTime = data?.[STORAGE_KEYS.INSTALLATION_TIME];
+        
+        // Don't show rating if user has disabled it or already rated
+        if (hasShownRating || ratingDisabled) {
+            return;
+        }
+        
+        // Check if 7 days have passed since installation
+        if (installationTime) {
+            const sevenDaysInMs = 7 * 24 * 60 * 60 * 1000; // 7 days in milliseconds
+            const timeSinceInstallation = Date.now() - installationTime;
+            
+            if (timeSinceInstallation < sevenDaysInMs) {
+                return; // Not enough time has passed
             }
+        }
+        
+        // Show rating modal after pressing Clean if user hasn't rated yet
+        const modal = document.getElementById('rateModal');
+        if (modal && modal.classList.contains('hidden')) {
+            modal.classList.remove('hidden');
+            const closeBtn = document.getElementById('rateCloseBtn');
+            const previouslyFocused = document.activeElement;
+            // focus trap
+            const focusable = modal.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
+            const firstEl = focusable[0];
+            const lastEl = focusable[focusable.length - 1];
+            if (firstEl) firstEl.focus();
+            function onKeydown(ev) {
+                if (ev.key === 'Escape') { hide(); }
+                if (ev.key === 'Tab' && focusable.length > 0) {
+                    if (ev.shiftKey && document.activeElement === firstEl) { ev.preventDefault(); lastEl.focus(); }
+                    else if (!ev.shiftKey && document.activeElement === lastEl) { ev.preventDefault(); firstEl.focus(); }
+                }
+            }
+            function hide() {
+                modal.classList.add('hidden');
+                document.removeEventListener('keydown', onKeydown, true);
+                if (previouslyFocused && previouslyFocused.focus) previouslyFocused.focus();
+            }
+            if (closeBtn) closeBtn.onclick = hide;
+            // Close on overlay click
+            modal.addEventListener('click', (e) => { if (e.target === modal) hide(); }, { once: true });
+            document.addEventListener('keydown', onKeydown, true);
         }
     });
 }
@@ -1129,12 +1313,36 @@ async function getCookieCount(tab) {
 async function getStorageCount(tabId, storageType) {
     if (typeof chrome.scripting?.executeScript !== 'function') throw new Error("Missing 'scripting' permission or API unavailable.");
     if (!tabId) throw new Error("Invalid tabId for storage count.");
+    
+    // Check if we can access the tab first
+    try {
+        const tab = await chrome.tabs.get(tabId);
+        if (!tab.url || tab.url.startsWith('chrome://') || tab.url.startsWith('chrome-extension://') || tab.url.startsWith('file://')) {
+            return 0; // Cannot access storage on this type of page
+        }
+    } catch (e) {
+        return 0; // Cannot access tab information
+    }
     try {
         const results = await chrome.scripting.executeScript({
             target: { tabId: tabId }, injectImmediately: true,
             func: (sType) => {
                 try {
-                    return { count: window[sType]?.length ?? 0, success: true };
+                    const st = window[sType];
+                    if (!st) {
+                        return { count: 0, success: true };
+                    }
+                    
+                    // Get the count safely
+                    let count = 0;
+                    try {
+                        count = st.length;
+                    } catch (e) {
+                        // Some storage objects might not have a length property
+                        count = Object.keys(st).length;
+                    }
+                    
+                    return { count: count, success: true };
                 } catch (e) {
                     return { error: e.message, success: false };
                 }
