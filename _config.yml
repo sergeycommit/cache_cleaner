@@ -20,13 +20,15 @@ lang: en-US
 github:
   repository_url: https://github.com/sergeycommit/cache_cleaner
 
-# Exclude files from processing
+# Exclude files from processing (but keep images accessible)
 exclude:
-  - src/
+  - src/popup.js
+  - src/popup.css
+  - src/popup.html
+  - src/service-worker.js
+  - src/manifest.json
+  - src/_locales/
+  - src/package.json
+  - src/README.md
   - Archive.zip
   - README.md
-  - package.json
-  - manifest.json
-  - "*.js"
-  - "*.css"
-  - _locales/
