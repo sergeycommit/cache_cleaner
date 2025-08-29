@@ -1,4 +1,32 @@
----
-layout: default
----
-title: ""
+title: "Cache Cleaner - Clean & Fast Browsing"
+description: "Keep your browser fast and clean with Cache Cleaner extension"
+baseurl: ""
+url: "https://sergeycommit.github.io/cache_cleaner"
+
+# Jekyll settings
+markdown: kramdown
+highlighter: rouge
+theme: jekyll-theme-minimal
+
+plugins:
+  - jekyll-seo-tag
+  - jekyll-sitemap
+
+# SEO settings
+author: sergeycommit
+lang: en-US
+
+# Social settings
+github:
+  repository_url: https://github.com/sergeycommit/cache_cleaner
+
+# Exclude files from processing
+exclude:
+  - src/
+  - Archive.zip
+  - README.md
+  - package.json
+  - manifest.json
+  - "*.js"
+  - "*.css"
+  - _locales/
