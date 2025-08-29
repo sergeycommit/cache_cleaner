@@ -5,6 +5,14 @@ const STORAGE_KEYS = { PREFERENCES: 'preferences', USAGE_STATS: 'usageStats', TH
 const DEFAULT_PREFERENCES = { cookies: true, localStorage: true, sessionStorage: true, cache: false, indexedDB: false, clearHistory: false, reloadPage: true, confirmBeforeClean: false, timeRange: '3600000' };
 const DEFAULT_USAGE_STATS = { cleanCount: 0 };
 const SELECTORS = {
+    shareBtn: '#shareBtn',
+    shareModal: '#shareModal',
+    closeShareModal: '#closeShareModal',
+    shareLinkInput: '#shareLinkInput',
+    copyLinkBtn: '#copyLinkBtn',
+    shareTwitter: '#shareTwitter',
+    shareFacebook: '#shareFacebook',
+    shareEmail: '#shareEmail',
     themeToggle: '#themeToggle',
     appTitle: 'header h1',
     tabStatusMessage: '#tabStatusMessage',
@@ -71,11 +79,115 @@ function escapeHtml(unsafe) {
         .replace(/"/g, "&quot;")
         .replace(/'/g, "&#039;");
 }
+
+// --- Permission Validation ---
+async function checkAndValidatePermissions() {
+    console.log("Popup: Checking API permissions and availability");
+    
+    const permissionIssues = [];
+    const disabledFeatures = [];
+
+    try {
+        // Check cookies API
+        if (typeof chrome.cookies?.getAll !== 'function') {
+            console.warn("Popup: Cookies API unavailable");
+            disabledFeatures.push('cookies');
+            permissionIssues.push("Cookies management unavailable - missing permission");
+        }
+
+        // Check scripting API
+        if (typeof chrome.scripting?.executeScript !== 'function') {
+            console.warn("Popup: Scripting API unavailable");
+            disabledFeatures.push('localStorage', 'sessionStorage');
+            permissionIssues.push("Storage management unavailable - missing scripting permission");
+        }
+
+        // Check browsingData API
+        if (typeof chrome.browsingData?.remove !== 'function') {
+            console.warn("Popup: BrowsingData API unavailable");
+            disabledFeatures.push('cache', 'indexedDB');
+            permissionIssues.push("Browser cache/IndexedDB clearing unavailable - missing browsingData permission");
+        }
+
+        // Check history API
+        if (typeof chrome.history?.deleteRange !== 'function') {
+            console.warn("Popup: History API unavailable");
+            disabledFeatures.push('clearHistory');
+            permissionIssues.push("History clearing unavailable - missing history permission");
+        }
+
+        // Check tabs API
+        if (typeof chrome.tabs?.query !== 'function') {
+            console.warn("Popup: Tabs API unavailable");
+            permissionIssues.push("Tab information unavailable - missing tabs permission");
+        }
+
+        // Check storage API
+        if (typeof chrome.storage?.local?.get !== 'function') {
+            console.error("Popup: Storage API unavailable - this is critical!");
+            throw new Error("Extension storage unavailable - missing storage permission");
+        }
+
+        // Disable features that aren't available
+        if (disabledFeatures.length > 0) {
+            console.log(`Popup: Disabling features due to missing permissions: ${disabledFeatures.join(', ')}`);
+            disableFeatures(disabledFeatures);
+        }
+
+        // Store permission status for reference
+        chrome.storage.local.set({
+            'permissionIssues': permissionIssues,
+            'disabledFeatures': disabledFeatures,
+            'lastPermissionCheck': Date.now()
+        }).catch(err => console.error("Failed to save permission status:", err));
+
+        if (permissionIssues.length > 0) {
+            console.warn("Popup: Some features disabled due to permission issues:", permissionIssues);
+            // Could show a warning to user if needed
+        }
+
+    } catch (error) {
+        console.error("Popup: Critical error during permission check:", error);
+        throw error; // Re-throw critical errors
+    }
+}
+
+function disableFeatures(disabledFeatures) {
+    disabledFeatures.forEach(feature => {
+        const checkbox = $[`${feature}Check`];
+        if (checkbox) {
+            checkbox.disabled = true;
+            checkbox.checked = false;
+            
+            const row = checkbox.closest('.option-row');
+            if (row) {
+                row.classList.add('disabled', 'permission-disabled');
+                row.title = `${feature} clearing is not available - missing browser permission`;
+                
+                // Add visual indicator
+                const label = row.querySelector('label');
+                if (label && !label.querySelector('.permission-warning')) {
+                    const warningIcon = document.createElement('i');
+                    warningIcon.className = 'fas fa-exclamation-triangle permission-warning';
+                    warningIcon.title = 'Feature disabled - missing permission';
+                    warningIcon.style.color = '#ff6b6b';
+                    warningIcon.style.marginLeft = '5px';
+                    label.appendChild(warningIcon);
+                }
+            }
+        }
+    });
+}
 // --- Initialization ---
 document.addEventListener('DOMContentLoaded', async () => {
     try {
+        console.log("Popup: Starting initialization");
         cacheDOMElements();
         const loadedTheme = await loadAppState();
+        
+        // Check permissions and disable unavailable features
+        await checkAndValidatePermissions();
+        
         setupInitialUI(loadedTheme);
         await checkActiveTabAndUpdateUI();
         addEventListeners();
@@ -83,6 +195,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         addStorageListener();
         updateCleanButtonState();
         setupRatingStars();
+        
+        console.log("Popup: Initialization completed successfully");
     } catch (error) {
         console.error("Popup Initialization Failed:", error);
         displayFatalError(`Initialization failed: ${error.message}`);
@@ -325,6 +439,12 @@ function updateDataCountUI(elementId, count) {
 // --- Event Listeners ---
 
 function addEventListeners() {
+    $.shareBtn?.addEventListener('click', openShareModal);
+    $.closeShareModal?.addEventListener('click', closeShareModal);
+    $.copyLinkBtn?.addEventListener('click', copyShareLink);
+    $.shareTwitter?.addEventListener('click', () => shareToTwitter());
+    $.shareFacebook?.addEventListener('click', () => shareToFacebook());
+    $.shareEmail?.addEventListener('click', () => shareToEmail());
     $.themeToggle?.addEventListener('click', handleThemeToggle);
 
     const preferenceElements = [
@@ -349,9 +469,124 @@ function addEventListeners() {
     $.closeSummaryBtn?.addEventListener('click', () => $.summaryElement?.classList.add('hidden'));
     $.closeErrorBtn?.addEventListener('click', () => $.errorElement?.classList.add('hidden'));
     document.body.addEventListener('scroll', handleBodyScroll, { capture: true, passive: true });
+    
+    // Close share modal on overlay click
+    $.shareModal?.addEventListener('click', (e) => {
+        if (e.target === $.shareModal || e.target.classList.contains('share-modal-overlay')) {
+            closeShareModal();
+        }
+    });
+    
+    // Close share modal on Escape key
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && $.shareModal && !$.shareModal.classList.contains('hidden')) {
+            closeShareModal();
+        }
+    });
 }
 
 // --- Event Handlers ---
+
+// --- Notification Testing Function ---
+async function testNotifications() {
+    console.log("Popup: Testing notifications...");
+    
+    try {
+        // Send test message to service worker
+        await chrome.runtime.sendMessage({
+            action: "testNotification"
+        });
+        console.log("Popup: Test notification message sent");
+    } catch (error) {
+        console.error("Popup: Failed to send test notification message:", error);
+    }
+}
+
+// Make it available globally for easy testing
+window.testNotifications = testNotifications;
+
+// --- Share Modal Functions ---
+
+function openShareModal() {
+    if ($.shareModal) {
+        $.shareModal.classList.remove('hidden');
+        $.shareModal.setAttribute('aria-hidden', 'false');
+        
+        // Focus on modal for accessibility
+        setTimeout(() => {
+            $.closeShareModal?.focus();
+        }, 100);
+    }
+}
+
+function closeShareModal() {
+    if ($.shareModal) {
+        $.shareModal.classList.add('hidden');
+        $.shareModal.setAttribute('aria-hidden', 'true');
+        
+        // Return focus to share button
+        $.shareBtn?.focus();
+    }
+}
+
+function copyShareLink() {
+    const shareLink = $.shareLinkInput?.value || 'https://chromewebstore.google.com/detail/fgggiddcalbfbchppcmfaldmnfmmneof';
+    
+    navigator.clipboard.writeText(shareLink).then(() => {
+        console.log('Share link copied to clipboard');
+        
+        // Show visual feedback
+        if ($.copyLinkBtn) {
+            $.copyLinkBtn.classList.add('copied');
+            setTimeout(() => {
+                $.copyLinkBtn.classList.remove('copied');
+            }, 2000);
+        }
+    }).catch(err => {
+        console.error('Failed to copy share link:', err);
+        // Fallback: select text
+        if ($.shareLinkInput) {
+            $.shareLinkInput.select();
+            $.shareLinkInput.setSelectionRange(0, 99999); // For mobile devices
+        }
+    });
+}
+
+function shareToTwitter() {
+    const shareLink = 'https://chromewebstore.google.com/detail/fgggiddcalbfbchppcmfaldmnfmmneof';
+    const text = 'Keep your browser fast and clean with Cache Cleaner extension!';
+    const twitterUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(shareLink)}`;
+    
+    window.open(twitterUrl, '_blank', 'width=550,height=420');
+    closeShareModal();
+}
+
+function shareToFacebook() {
+    const shareLink = 'https://chromewebstore.google.com/detail/fgggiddcalbfbchppcmfaldmnfmmneof';
+    const facebookUrl = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareLink)}`;
+    
+    window.open(facebookUrl, '_blank', 'width=580,height=470');
+    closeShareModal();
+}
+
+function shareToEmail() {
+    const shareLink = 'https://chromewebstore.google.com/detail/fgggiddcalbfbchppcmfaldmnfmmneof';
+    const subject = 'Cache Cleaner - Clean & Fast Browsing Extension';
+    const body = `Hi!
+
+I wanted to share this awesome browser extension with you: Cache Cleaner
+
+It helps keep your browser fast and clean by clearing cache, cookies, and other temporary data with just one click. Really useful for better browsing performance!
+
+Check it out: ${shareLink}
+
+Best regards!`;
+
+    const emailUrl = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+    
+    window.open(emailUrl);
+    closeShareModal();
+}
 
 function handleThemeToggle() {
     const newTheme = document.body.classList.contains('dark-mode') ? 'light' : 'dark';
@@ -424,10 +659,12 @@ function handleBodyClick(e) {
                     recordRating(parseInt(input.value, 10));
                 }
 
-                // Open the link
-                const anchor = ratingLabel.querySelector('a');
-                if (anchor && anchor.href) {
-                    window.open(anchor.href, '_blank');
+                // Open the link to Chrome Web Store reviews
+                const rating = parseInt(input.value, 10);
+                if (rating >= 4) {
+                    window.open('https://chromewebstore.google.com/detail/cache-cleaner/fgggiddcalbfbchppcmfaldmnfmmneof/reviews', '_blank');
+                } else {
+                    window.open('https://docs.google.com/forms/d/e/1FAIpQLSfMhxA90yHeCzM--GsPpnqlf_d9Rjm8N5jB0c52YyOst9MWdg/viewform?usp=dialog', '_blank');
                 }
             }
         }
@@ -678,30 +915,51 @@ function addStorageListener() {
 // --- Core Actions ---
 
 async function handleCleanButtonClick() {
-    if (!$.cleanBtn || ($.cleanBtn.disabled && !isAwaitingConfirmation) || isCleaningInProgress) return;
-    if (!isAnyCleaningOptionSelected() && !isAwaitingConfirmation) return;
+    if (!$.cleanBtn || ($.cleanBtn.disabled && !isAwaitingConfirmation) || isCleaningInProgress) {
+        console.log("Popup: Clean button click ignored - invalid state");
+        return;
+    }
+    
+    if (!isAnyCleaningOptionSelected() && !isAwaitingConfirmation) {
+        console.log("Popup: Clean button click ignored - no options selected");
+        return;
+    }
 
     try {
-        // Check cleaning flag in storage
-        const data = await chrome.storage.local.get(STORAGE_KEYS.CLEANING_FLAG);
-        if (data?.[STORAGE_KEYS.CLEANING_FLAG] === true) {
-            console.warn("Popup: Cleaning flag is still true. Aborting.");
+        console.log("Popup: Clean button clicked, starting cleaning process");
+
+        // Check if cleaning is already in progress via storage
+        const storageData = await new Promise((resolve, reject) => {
+            chrome.storage.local.get(STORAGE_KEYS.CLEANING_FLAG, (data) => {
+                if (chrome.runtime.lastError) {
+                    reject(new Error(`Storage access error: ${chrome.runtime.lastError.message}`));
+                } else {
+                    resolve(data);
+                }
+            });
+        });
+
+        if (storageData?.[STORAGE_KEYS.CLEANING_FLAG] === true) {
+            console.warn("Popup: Cleaning already in progress according to storage flag");
             isCleaningInProgress = true;
-            setButtonVisualState('loading', 'Cleaning in progress...');
+            setButtonVisualState('loading', 'Cleaning...');
             return;
         }
 
         // Handle confirmation state
         if (currentPreferences.confirmBeforeClean && !isAwaitingConfirmation) {
+            console.log("Popup: Requesting confirmation before cleaning");
             isAwaitingConfirmation = true;
-            setButtonVisualState('confirm', 'Confirm Clean?');
+            setButtonVisualState('confirm', 'Confirm?');
+            
+            // Set up outside click handler with a small delay to prevent immediate triggering
             setTimeout(() => {
                 document.addEventListener('click', handleOutsideConfirmClick, { once: true, capture: true });
-            }, 0);
+            }, 100);
             return;
         }
 
-        // Remove confirmation state if active
+        // Clean up confirmation state if active
         if (isAwaitingConfirmation) {
             document.removeEventListener('click', handleOutsideConfirmClick, { capture: true });
         }
@@ -710,63 +968,125 @@ async function handleCleanButtonClick() {
         isAwaitingConfirmation = false;
         isCleaningInProgress = true;
 
-        // Update UI
-        setButtonVisualState('loading', 'Cleaning in progress...');
+        // Update UI to show loading state
+        setButtonVisualState('loading', 'Cleaning...');
         hideResultCards();
+
+        // Validate active tab info
+        if (!activeTabInfo) {
+            throw new Error("No active tab information available");
+        }
 
         // Prepare cleaning options
         const optionsToSend = {
-            cookies: $.cookiesCheck?.checked && !$.cookiesCheck?.disabled,
-            localStorage: $.localStorageCheck?.checked && !$.localStorageCheck?.disabled,
-            sessionStorage: $.sessionStorageCheck?.checked && !$.sessionStorageCheck?.disabled,
-            cache: $.cacheCheck?.checked,
-            indexedDB: $.indexedDBCheck?.checked,
-            clearHistory: $.clearHistoryCheck?.checked,
-            reloadPage: currentPreferences.reloadPage,
+            cookies: !!($.cookiesCheck?.checked && !$.cookiesCheck?.disabled),
+            localStorage: !!($.localStorageCheck?.checked && !$.localStorageCheck?.disabled),
+            sessionStorage: !!($.sessionStorageCheck?.checked && !$.sessionStorageCheck?.disabled),
+            cache: !!($.cacheCheck?.checked),
+            indexedDB: !!($.indexedDBCheck?.checked),
+            clearHistory: !!($.clearHistoryCheck?.checked),
+            reloadPage: !!currentPreferences.reloadPage,
         };
 
-        const sinceTime = getSinceTime(currentPreferences.timeRange);
+        // Validate that at least one option is selected
+        const hasSelectedOptions = Object.values(optionsToSend).some(option => option === true);
+        if (!hasSelectedOptions) {
+            throw new Error("No cleaning options are currently selected");
+        }
 
-        // Set flag to ignore next storage change
+        const sinceTime = getSinceTime(currentPreferences.timeRange);
+        console.log(`Popup: Sending clean message with ${Object.keys(optionsToSend).filter(k => optionsToSend[k]).length} enabled options`);
+
+        // Set flag to ignore next storage change event
         ignoreNextStorageChange = true;
 
-        // Send cleaning message to service worker
-        await chrome.runtime.sendMessage({
+        // Send cleaning message to service worker with timeout
+        const cleaningMessage = {
             action: "cleanData",
             options: optionsToSend,
             tabInfo: activeTabInfo,
             sinceTime: sinceTime
+        };
+
+        const messagePromise = chrome.runtime.sendMessage(cleaningMessage);
+        const timeoutPromise = new Promise((_, reject) => {
+            setTimeout(() => reject(new Error("Cleaning request timed out")), 10000);
         });
 
-        // Update usage stats
-        usageStats.cleanCount++;
-        saveUsageStats();
-        checkAndShowRateRequest();
-
-    } catch (error) {
-        console.error("Popup: Error during cleaning:", error);
-
-        // Reset states
-        isCleaningInProgress = false;
-        isAwaitingConfirmation = false;
-
-        // Update UI with error
-        setButtonVisualState('error', 'Error');
-
-        // Show appropriate error message
-        let errorMessage = 'An unexpected error occurred.';
-        if (error.message.includes('Could not establish connection')) {
-            errorMessage = 'Service Error: Cannot connect. Try reloading extension.';
-        } else {
-            errorMessage = `Service Error: ${error.message}`;
+        const response = await Promise.race([messagePromise, timeoutPromise]);
+        
+        // Handle immediate error response from service worker
+        if (response && response.success === false) {
+            throw new Error(response.error || "Service worker reported failure");
         }
 
+        console.log("Popup: Cleaning message sent successfully");
+
+    } catch (error) {
+        console.error("Popup: Error during cleaning process:", error);
+
+        // Reset states immediately
+        isCleaningInProgress = false;
+        isAwaitingConfirmation = false;
+        
+        // Clear any pending ignore flag
+        ignoreNextStorageChange = false;
+
+        // Update UI with error state
+        setButtonVisualState('error', 'Error');
+
+        // Determine appropriate error message
+        let errorMessage = 'An unexpected error occurred during cleaning.';
+        let isConnectionError = false;
+
+        if (error.message.includes('Could not establish connection') || 
+            error.message.includes('Extension context invalidated') ||
+            error.message.includes('message port closed')) {
+            errorMessage = 'Cannot connect to background service. Try reloading the extension.';
+            isConnectionError = true;
+        } else if (error.message.includes('timed out')) {
+            // Don't show timeout as error - operation continues in background
+            console.log('Popup: Cleaning request timed out, but operation may continue in background');
+            
+            // Just reset UI state without showing error
+            isCleaningInProgress = false;
+            isAwaitingConfirmation = false;
+            ignoreNextStorageChange = false;
+            updateCleanButtonState();
+            return; // Exit without showing error message
+        } else if (error.message.includes('Storage access error')) {
+            errorMessage = 'Cannot access extension storage. Please try again.';
+        } else if (error.message.includes('No active tab')) {
+            errorMessage = 'Cannot access current tab information.';
+        } else if (error.message.includes('No cleaning options')) {
+            errorMessage = 'Please select at least one cleaning option.';
+        } else if (error.message.startsWith('Service worker reported')) {
+            errorMessage = `Service error: ${error.message.replace('Service worker reported failure', 'Operation failed')}`;
+        } else if (error.message && error.message !== 'An unexpected error occurred during cleaning.') {
+            errorMessage = `Error: ${error.message}`;
+        }
+
+        // Show error to user
         displayResults(false, [], [errorMessage]);
 
-        // Clean up and reset
+        // For connection errors, suggest more specific actions
+        if (isConnectionError) {
+            displayResults(false, [], [
+                errorMessage,
+                "Try: 1) Refresh this page, 2) Reload the extension, 3) Restart your browser"
+            ]);
+        }
+
+        // Clean up storage flag if needed
+        try {
+            await chrome.storage.local.remove(STORAGE_KEYS.CLEANING_FLAG);
+            console.log("Popup: Cleaned up storage flag after error");
+        } catch (storageError) {
+            console.error("Popup: Failed to clean up storage flag:", storageError);
+        }
+
+        // Reset button state after delay
         resetAfterDelay(3000);
-        chrome.storage.local.remove(STORAGE_KEYS.CLEANING_FLAG)
-            .catch(err => console.error("Failed to remove cleaning flag:", err));
     }
 }
 
@@ -863,8 +1183,10 @@ function showTooltip(element, text) {
 
     positionTooltip(element);
 
-    // Make tooltip visible
-    $.infoTooltip.style.opacity = '';
+    // Make tooltip visible with smooth animation
+    requestAnimationFrame(() => {
+        $.infoTooltip.style.opacity = '';
+    });
 }
 
 function positionTooltip(element) {
@@ -931,10 +1253,10 @@ function isAnyCleaningOptionSelected() {
 }
 
 function updateCleanButtonState() {
-    if (isCleaningInProgress) { setButtonVisualState('loading', 'Cleaning in progress...'); }
-    else if (isAwaitingConfirmation) { setButtonVisualState('confirm', 'Confirm Clean?'); }
-    else if (!isAnyCleaningOptionSelected()) { setButtonVisualState('disabled', 'Select options to clean'); }
-    else { setButtonVisualState('default', 'Clean Now'); }
+    if (isCleaningInProgress) { setButtonVisualState('loading', 'Cleaning...'); }
+    else if (isAwaitingConfirmation) { setButtonVisualState('confirm', 'Confirm?'); }
+    else if (!isAnyCleaningOptionSelected()) { setButtonVisualState('disabled', 'Select options'); }
+    else { setButtonVisualState('default', 'Clean'); }
 }
 
 function resetConfirmationState() {
@@ -973,7 +1295,7 @@ function setupRatingStars() {
                 // Open appropriate URL
                 if (rating >= 4) {
                     // Good rating - open Chrome Web Store
-                    window.open('https://chromewebstore.google.com/detail/cache-cleaner/deadjnaenmndpdpakgchpbedlcdmmoai/reviews', '_blank');
+                    window.open('https://chromewebstore.google.com/detail/cache-cleaner/fgggiddcalbfbchppcmfaldmnfmmneof/reviews', '_blank');
                 } else {
                     // Lower rating - open feedback form
                     window.open('https://docs.google.com/forms/d/e/1FAIpQLSfMhxA90yHeCzM--GsPpnqlf_d9Rjm8N5jB0c52YyOst9MWdg/viewform?usp=dialog', '_blank');
@@ -1025,68 +1347,194 @@ function checkAndShowRateRequest() {
     });
 }
 
-// --- Data Count Fetching Functions ---
+// --- Data Count Fetching Functions (Улучшенные) ---
+
 async function getCookieCount(tab) {
-    if (typeof chrome.cookies?.getAll !== 'function') throw new Error("Missing 'cookies' permission or API unavailable.");
-    if (!tab || !tab.url) throw new Error("Invalid tab info for cookie count.");
+    if (typeof chrome.cookies?.getAll !== 'function') {
+        throw new Error("Missing 'cookies' permission or API unavailable.");
+    }
+    
+    if (!tab || !tab.url) {
+        throw new Error("Invalid tab info for cookie count.");
+    }
+
     try {
-        let url; try { url = new URL(tab.url); } catch (e) { throw new Error(`Invalid tab URL: ${tab.url}`); }
-        const queryDetails = url.protocol.startsWith('http') && url.hostname ? { domain: url.hostname } : { url: tab.url };
-        const cookies = await chrome.cookies.getAll(queryDetails);
-        return cookies.length;
-    } catch (error) { console.error(`Error getting cookie count for ${tab.url}:`, error); throw new Error(`Cookie count error: ${error.message}`); }
+        let url;
+        try {
+            url = new URL(tab.url);
+        } catch (e) {
+            throw new Error(`Invalid tab URL: ${tab.url}`);
+        }
+
+        // Skip non-HTTP URLs
+        if (!url.protocol.startsWith('http')) {
+            throw new Error("Cannot get cookies for non-HTTP(S) pages.");
+        }
+
+        const domain = url.hostname;
+        if (!domain) {
+            throw new Error("Invalid domain for cookie count.");
+        }
+
+        console.log(`Popup: Getting cookies count for domain: ${domain}`);
+
+        // Create timeout promise to prevent hanging
+        const timeoutPromise = new Promise((_, reject) => {
+            setTimeout(() => reject(new Error("Cookie count timeout")), 5000);
+        });
+
+        // Get cookies for both main domain and subdomains
+        const cookiePromise = Promise.all([
+            chrome.cookies.getAll({ domain: domain }),
+            chrome.cookies.getAll({ domain: `.${domain}` })
+        ]).then(([mainDomainCookies, subDomainCookies]) => {
+            // Combine and remove duplicates
+            const allCookies = [...mainDomainCookies];
+            subDomainCookies.forEach(cookie => {
+                if (!allCookies.some(existing => 
+                    existing.name === cookie.name && existing.domain === cookie.domain)) {
+                    allCookies.push(cookie);
+                }
+            });
+            return allCookies.length;
+        });
+
+        return await Promise.race([cookiePromise, timeoutPromise]);
+
+    } catch (error) {
+        console.error(`Error getting cookie count for ${tab.url}:`, error);
+        
+        if (error.message.includes("timeout")) {
+            throw new Error("Cookie count request timed out");
+        }
+        
+        throw new Error(`Cookie count error: ${error.message}`);
+    }
 }
 
 async function getStorageCount(tabId, storageType) {
-    if (typeof chrome.scripting?.executeScript !== 'function') throw new Error("Missing 'scripting' permission or API unavailable.");
-    if (!tabId) throw new Error("Invalid tabId for storage count.");
+    if (typeof chrome.scripting?.executeScript !== 'function') {
+        throw new Error("Missing 'scripting' permission or API unavailable.");
+    }
+    
+    if (!tabId) {
+        throw new Error("Invalid tabId for storage count.");
+    }
+
     try {
-        const results = await chrome.scripting.executeScript({
-            target: { tabId: tabId }, injectImmediately: true,
+        console.log(`Popup: Getting ${storageType} count for tab ${tabId}`);
+
+        // Create timeout promise
+        const timeoutPromise = new Promise((_, reject) => {
+            setTimeout(() => reject(new Error(`${storageType} count timeout`)), 3000);
+        });
+
+        const scriptPromise = chrome.scripting.executeScript({
+            target: { tabId: tabId },
+            injectImmediately: true,
             func: (sType) => {
                 try {
-                    return { count: window[sType]?.length ?? 0, success: true };
+                    // Check if storage is available
+                    if (typeof window[sType] === 'undefined') {
+                        return { count: 0, success: true, message: `${sType} not available` };
+                    }
+                    
+                    // Check if we can access it
+                    const storage = window[sType];
+                    if (!storage) {
+                        return { count: 0, success: true, message: `${sType} is null` };
+                    }
+                    
+                    // Try to get length
+                    const count = storage.length ?? 0;
+                    return { count: count, success: true };
                 } catch (e) {
-                    return { error: e.message, success: false };
+                    // Common errors and their handling
+                    let errorType = 'unknown';
+                    if (e.name === 'SecurityError') {
+                        errorType = 'security';
+                    } else if (e.message.includes('undefined')) {
+                        errorType = 'unavailable';
+                    } else if (e.message.includes('access')) {
+                        errorType = 'access';
+                    }
+                    
+                    return { 
+                        error: e.message, 
+                        errorType: errorType,
+                        success: false 
+                    };
                 }
             },
             args: [storageType]
         });
 
-        // More robust results check
+        const results = await Promise.race([scriptPromise, timeoutPromise]);
+
         if (!results || results.length === 0 || !results[0]) {
-            throw new Error(`Cannot inject script into tab ${tabId} (${storageType}).`);
+            throw new Error(`Cannot inject script into tab ${tabId} for ${storageType}.`);
         }
 
         const frameResult = results[0];
 
+        // Handle script execution errors
         if (frameResult.error) {
-            console.warn(`Script execution error for ${storageType}:`, frameResult.error);
-            throw new Error(`${storageType} script error: ${frameResult.error.message || 'Unknown'}`);
+            const errorMsg = frameResult.error.message || frameResult.error;
+            console.warn(`Script execution error for ${storageType}:`, errorMsg);
+            
+            if (errorMsg.includes("chrome-extension://") || errorMsg.includes("moz-extension://")) {
+                throw new Error("Cannot access storage on extension pages");
+            } else if (errorMsg.includes("Content Security Policy")) {
+                throw new Error("Blocked by Content Security Policy");
+            } else {
+                throw new Error(`Script execution failed: ${errorMsg}`);
+            }
         }
 
         const result = frameResult.result;
+        if (!result) {
+            throw new Error(`No result from storage script for ${storageType}`);
+        }
 
         if (!result.success) {
-            throw new Error(`Cannot access ${storageType}: ${result.error || 'Context error'}`);
+            const errorType = result.errorType || 'unknown';
+            switch (errorType) {
+                case 'security':
+                    throw new Error(`Security error accessing ${storageType}`);
+                case 'unavailable':
+                    throw new Error(`${storageType} is not available on this page`);
+                case 'access':
+                    throw new Error(`Cannot access ${storageType} on this page`);
+                default:
+                    throw new Error(`Cannot access ${storageType}: ${result.error || 'Unknown error'}`);
+            }
         }
 
-        return result.count;
+        if (result.message) {
+            console.log(`Popup: ${storageType} count - ${result.message}`);
+        }
+
+        return result.count || 0;
+
     } catch (error) {
-        let msg = error.message || "Unknown executeScript error";
+        let msg = error.message || "Unknown storage count error";
 
-        // More specific error handling
+        console.error(`Error getting ${storageType} count for tab ${tabId}:`, error);
+
+        // Categorize errors for better user experience
         if (msg.includes("No tab with id")) {
-            msg = `Tab ${tabId} not found.`;
-        }
-        else if (msg.includes("showing error page")) {
-            msg = `Page is showing an error (${storageType}).`;
-        }
-        else if (msg.includes("Cannot inject") || msg.includes("Cannot access") ||
-            msg.includes("chrome://") || msg.includes("file://")) {
-            msg = `Page access denied (${storageType}).`;
-        }
-        else {
+            msg = `Tab ${tabId} not found or closed.`;
+        } else if (msg.includes("timeout")) {
+            msg = `${storageType} count request timed out.`;
+        } else if (msg.includes("showing error page")) {
+            msg = `Cannot access ${storageType} on error pages.`;
+        } else if (msg.includes("Cannot inject") || msg.includes("chrome://") || msg.includes("file://")) {
+            msg = `Cannot access ${storageType} on protected pages.`;
+        } else if (msg.includes("Content Security Policy")) {
+            msg = `Page security policy blocks ${storageType} access.`;
+        } else if (msg.includes("extension pages")) {
+            msg = `Cannot access ${storageType} on extension pages.`;
+        } else if (!msg.startsWith(storageType) && !msg.includes("Failed to get")) {
             msg = `Failed to get ${storageType} count: ${msg}`;
         }
 

@@ -3,9 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cache Cleaner Advanced</title>
+    <title>Cache Cleaner - Clean & Fast Browsing</title>
     <link rel="stylesheet" href="popup.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.2.0/css/all.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 <body>
 <div class="container">
@@ -14,10 +14,14 @@
             <img src="images/icon.png" alt="Cache Cleaner Logo" class="logo">
             <h1>Cache Cleaner</h1>
         </div>
-        <!-- Кнопка "Поделиться" удалена -->
-        <button id="themeToggle" class="theme-toggle" title="Toggle Theme" aria-label="Toggle Theme">
-            <i class="fas fa-moon"></i>
-        </button>
+        <div class="header-actions">
+            <button id="shareBtn" class="icon-btn share-btn" title="Share Cache Cleaner" aria-label="Share Cache Cleaner">
+                <i class="fas fa-share-alt"></i>
+            </button>
+            <button id="themeToggle" class="icon-btn theme-toggle" title="Toggle Theme" aria-label="Toggle Theme">
+                <i class="fas fa-moon"></i>
+            </button>
+        </div>
     </header>
 
     <!-- Сообщения -->
@@ -32,27 +36,61 @@
 
     <div id="infoTooltip" class="tooltip" role="tooltip" aria-hidden="true"></div>
 
+    <!-- Share Modal -->
+    <div id="shareModal" class="share-modal hidden" role="dialog" aria-hidden="true" aria-labelledby="shareModalTitle">
+        <div class="share-modal-overlay"></div>
+        <div class="share-modal-content">
+            <div class="share-modal-header">
+                <h3 id="shareModalTitle">Share Cache Cleaner</h3>
+                <button id="closeShareModal" class="close-btn" aria-label="Close share dialog">×</button>
+            </div>
+            <div class="share-modal-body">
+                <p class="share-description">Share this extension with your friends and colleagues:</p>
+                <div class="share-link-container">
+                    <input type="text" id="shareLinkInput" class="share-link-input" readonly value="https://chromewebstore.google.com/detail/fgggiddcalbfbchppcmfaldmnfmmneof">
+                    <button id="copyLinkBtn" class="copy-link-btn" title="Copy link">
+                        <i class="fas fa-copy"></i>
+                    </button>
+                </div>
+                <div class="share-options">
+                    <button id="shareTwitter" class="share-option-btn twitter" aria-label="Share on Twitter">
+                        <i class="fab fa-twitter"></i>
+                        <span>Twitter</span>
+                    </button>
+                    <button id="shareFacebook" class="share-option-btn facebook" aria-label="Share on Facebook">
+                        <i class="fab fa-facebook-f"></i>
+                        <span>Facebook</span>
+                    </button>
+                    <button id="shareEmail" class="share-option-btn email" aria-label="Share via Email">
+                        <i class="fas fa-envelope"></i>
+                        <span>Email</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Данные Текущей Вкладки -->
     <div class="card" id="currentTabDataCard">
         <div class="card-header">
-            <i class="fas fa-window-restore"></i> <h2>Current Tab Data</h2>
+            <i class="fas fa-globe"></i> <h2>Current Tab</h2>
         </div>
         <div class="options">
             <div class="option-row">
                 <label for="cookies"> Cookies <span class="data-count" id="cookiesCount"></span>
-                    <i class="fas fa-info-circle info-icon" data-tooltip="Site data for logins, preferences, etc. Cleared only for the current site's domain." aria-label="Info about Cookies"></i>
+                    <i class="fas fa-question-circle info-icon" data-tooltip="Site data for logins and preferences. Cleared only for current domain." aria-label="Info about Cookies"></i>
                 </label>
                 <div class="toggle-switch"><input type="checkbox" id="cookies"><span class="slider"></span></div>
             </div>
             <div class="option-row">
                 <label for="localStorage"> Local Storage <span class="data-count" id="localStorageCount"></span>
-                    <i class="fas fa-info-circle info-icon" data-tooltip="Data stored permanently by the site. Cleared only for the current site." aria-label="Info about Local Storage"></i>
+                    <i class="fas fa-question-circle info-icon" data-tooltip="Permanent site data. Cleared only for current site." aria-label="Info about Local Storage"></i>
                 </label>
                 <div class="toggle-switch"><input type="checkbox" id="localStorage"><span class="slider"></span></div>
             </div>
             <div class="option-row">
                 <label for="sessionStorage"> Session Storage <span class="data-count" id="sessionStorageCount"></span>
-                    <i class="fas fa-info-circle info-icon" data-tooltip="Temporary data stored by the site. Cleared only for the current site." aria-label="Info about Session Storage"></i>
+                    <i class="fas fa-question-circle info-icon" data-tooltip="Temporary site data. Cleared only for current site." aria-label="Info about Session Storage"></i>
                 </label>
                 <div class="toggle-switch"><input type="checkbox" id="sessionStorage"><span class="slider"></span></div>
             </div>
@@ -62,8 +100,8 @@
     <!-- Advanced Options (сворачиваемый блок) -->
     <div class="card collapsible collapsed" id="additionalOptionsCard">
         <div class="card-header collapsible-header" role="button" tabindex="0" aria-expanded="false" aria-controls="additionalOptionsContent">
-            <i class="fas fa-sliders-h"></i>
-            <h2>Advanced Options</h2>
+            <i class="fas fa-cog"></i>
+            <h2>Advanced</h2>
             <i class="fas fa-chevron-down collapse-icon"></i>
         </div>
         <div class="card-content" id="additionalOptionsContent">
@@ -82,32 +120,32 @@
                 <!-- Global Cleaning Options -->
                 <div class="option-row">
                     <label for="cache"> Browser Cache <span class="option-range-indicator"></span>
-                        <i class="fas fa-info-circle info-icon" data-tooltip="Temporary internet files. Cleared for all sites based on selected time range." aria-label="Info about Browser Cache"></i>
+                        <i class="fas fa-question-circle info-icon" data-tooltip="Temporary files. Cleared for all sites." aria-label="Info about Browser Cache"></i>
                     </label>
                     <div class="toggle-switch"><input type="checkbox" id="cache"><span class="slider"></span></div>
                 </div>
                 <div class="option-row">
                     <label for="indexedDB"> IndexedDB <span class="option-range-indicator"></span>
-                        <i class="fas fa-info-circle info-icon" data-tooltip="Databases used by web apps. Cleared for all sites based on selected time range." aria-label="Info about IndexedDB"></i>
+                        <i class="fas fa-question-circle info-icon" data-tooltip="Web app databases. Cleared for all sites." aria-label="Info about IndexedDB"></i>
                     </label>
                     <div class="toggle-switch"><input type="checkbox" id="indexedDB"><span class="slider"></span></div>
                 </div>
                 <div class="option-row">
                     <label for="clearHistory"> History <span class="option-range-indicator"></span>
-                        <i class="fas fa-info-circle info-icon" data-tooltip="Your record of visited websites. Cleared based on selected time range." aria-label="Info about Clearing History"></i>
+                        <i class="fas fa-question-circle info-icon" data-tooltip="Browsing history. Cleared based on time range." aria-label="Info about Clearing History"></i>
                     </label>
                     <div class="toggle-switch"><input type="checkbox" id="clearHistory"><span class="slider"></span></div>
                 </div>
                 <!-- Other Settings -->
                 <div class="option-row setting-separator">
                     <label for="reloadPage"> Reload Page After Cleaning
-                        <i class="fas fa-info-circle info-icon" data-tooltip="Automatically reload the current page after cleaning is finished successfully." aria-label="Info about Reload Page setting"></i>
+                        <i class="fas fa-question-circle info-icon" data-tooltip="Auto-reload page after cleaning." aria-label="Info about Reload Page setting"></i>
                     </label>
                     <div class="toggle-switch"><input type="checkbox" id="reloadPage"><span class="slider"></span></div>
                 </div>
                 <div class="option-row">
                     <label for="confirmBeforeClean"> Confirm Before Cleaning
-                        <i class="fas fa-info-circle info-icon" data-tooltip="Shows an extra confirmation step before clearing the selected data." aria-label="Info about Confirm Before Cleaning setting"></i>
+                        <i class="fas fa-question-circle info-icon" data-tooltip="Ask for confirmation before cleaning." aria-label="Info about Confirm Before Cleaning setting"></i>
                     </label>
                     <div class="toggle-switch"><input type="checkbox" id="confirmBeforeClean"><span class="slider"></span></div>
                 </div>
@@ -176,7 +214,7 @@
                 </label>
                 <input name="fst" id="fst-4" value="4" type="radio" />
                 <label for="fst-4">
-                    <a href="https://chromewebstore.google.com/detail/cache-cleaner/deadjnaenmndpdpakgchpbedlcdmmoai/reviews" target="_blank">
+                    <a href="https://chromewebstore.google.com/detail/cache-cleaner/fgggiddcalbfbchppcmfaldmnfmmneof/reviews" target="_blank">
                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 576 512">
                             <path d="M259.3 17.8L194 150.2 47.9 171.5c-26.2 3.8-36.7 36.1-17.7 54.6l105.7 103-25 145.5c-4.5 26.3 23.2 46 46.4 33.7L288 439.6l130.7 68.7c23.2 12.2 50.9-7.4 46.4-33.7l-25-145.5 105.7-103c19-18.5 8.5-50.8-17.7-54.6L382 150.2 316.7 17.8c-11.7-23.6-45.6-23.9-57.4 0z"/>
                         </svg>
@@ -184,7 +222,7 @@
                 </label>
                 <input name="fst" id="fst-5" value="5" type="radio" />
                 <label for="fst-5">
-                    <a href="https://chromewebstore.google.com/detail/cache-cleaner/deadjnaenmndpdpakgchpbedlcdmmoai/reviews" target="_blank">
+                    <a href="https://chromewebstore.google.com/detail/cache-cleaner/fgggiddcalbfbchppcmfaldmnfmmneof/reviews" target="_blank">
                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 576 512">
                             <path d="M259.3 17.8L194 150.2 47.9 171.5c-26.2 3.8-36.7 36.1-17.7 54.6l105.7 103-25 145.5c-4.5 26.3 23.2 46 46.4 33.7L288 439.6l130.7 68.7c23.2 12.2 50.9-7.4 46.4-33.7l-25-145.5 105.7-103c19-18.5 8.5-50.8-17.7-54.6L382 150.2 316.7 17.8c-11.7-23.6-45.6-23.9-57.4 0z"/>
                         </svg>
